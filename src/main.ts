@@ -1,21 +1,17 @@
-// src/main.ts
 import { NestFactory, Reflector } from '@nestjs/core';
-import { VersioningType, ClassSerializerInterceptor } from '@nestjs/common';
+import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
 
-// Security
 import helmet from 'helmet';
-import * as cookieParser from 'cookie-parser';
-import * as csurf from 'csurf';
-import * as compression from 'compression';
-import * as session from 'express-session';
+import cookieParser from 'cookie-parser';
+import csurf from 'csurf';
+import compression from 'compression';
+import session from 'express-session';
 import MongoStore from 'connect-mongo';
 
-// Logging
-import { Logger } from 'nestjs-pino'; // or WinstonModule logger
+import { Logger, PinoLogger } from 'nestjs-pino'; // or WinstonModule logger
 
-// Global pipes/filters
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
@@ -64,6 +60,10 @@ async function bootstrap() {
   // Must come BEFORE csurf so it can read the CSRF cookie from the request.
   app.use(cookieParser());
 
+  if (!SESSION_SECRET) {
+    throw new Error('SESSION_SECRET is not defined in environment variables');
+  }
+
   // ── Session (Hybrid Auth: session-based path) ──────────────────────────────
   // Sessions are stored in MongoDB to survive server restarts/scale-out.
   app.use(
@@ -73,9 +73,9 @@ async function bootstrap() {
       saveUninitialized: false,
       store: MongoStore.create({ mongoUrl: MONGO_URI }),
       cookie: {
-        httpOnly: true,           // Prevents JS access — mitigates XSS
+        httpOnly: true, // Prevents JS access — mitigates XSS
         secure: NODE_ENV === 'production', // HTTPS only in prod
-        sameSite: 'strict',       // Mitigates CSRF for session cookie
+        sameSite: 'strict', // Mitigates CSRF for session cookie
         maxAge: 1000 * 60 * 60 * 24, // 24 hours
       },
     }),
@@ -114,9 +114,9 @@ async function bootstrap() {
   // and validates them via class-validator decorators.
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,         // Strip unknown properties — prevents mass assignment
+      whitelist: true, // Strip unknown properties — prevents mass assignment
       forbidNonWhitelisted: true, // Throw error if unknown props are sent
-      transform: true,         // Auto-convert primitives (e.g., "3" → 3)
+      transform: true, // Auto-convert primitives (e.g., "3" → 3)
       transformOptions: { enableImplicitConversion: true },
     }),
   );
@@ -128,7 +128,7 @@ async function bootstrap() {
   // ClassSerializerInterceptor respects @Exclude() and @Expose() on DTOs
   app.useGlobalInterceptors(
     new ClassSerializerInterceptor(app.get(Reflector)),
-    new LoggingInterceptor(), // Logs request/response pairs with timing
+    new LoggingInterceptor(app.get(PinoLogger)), // Logs request/response pairs with timing
   );
 
   await app.listen(PORT);
