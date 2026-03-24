@@ -10,7 +10,7 @@ import compression from 'compression';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
 
-import { Logger, PinoLogger } from 'nestjs-pino'; // or WinstonModule logger
+import { Logger, PinoLogger } from 'nestjs-pino';
 
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
