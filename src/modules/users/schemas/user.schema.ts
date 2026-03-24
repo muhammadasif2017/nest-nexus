@@ -1,4 +1,3 @@
-// src/modules/users/schemas/user.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, HydratedDocument } from 'mongoose';
 import * as bcrypt from 'bcrypt';
@@ -15,13 +14,13 @@ export type UserDocument = HydratedDocument<User>;
 @Schema({ _id: false }) // No separate _id for embedded sub-documents
 export class RefreshToken {
   @Prop({ required: true })
-  tokenHash: string; // bcrypt hash, never store raw tokens
+  tokenHash!: string; // bcrypt hash, never store raw tokens
 
   @Prop({ required: true })
-  expiresAt: Date;
+  expiresAt!: Date;
 
   @Prop({ default: false })
-  isRevoked: boolean;
+  isRevoked!: boolean;
 }
 
 // ── Main User Schema ───────────────────────────────────────────────────────────
@@ -32,7 +31,7 @@ export class RefreshToken {
     // When serializing to JSON, run the transform below.
     // This is a safety net — the serialization interceptor (class-transformer)
     // is your PRIMARY line of defense; this is a secondary fallback.
-    transform: (_, ret) => {
+    transform: (_, ret: Record<string, unknown>) => {
       delete ret.password;
       delete ret.refreshTokens;
       return ret;
@@ -48,20 +47,20 @@ export class User extends Document {
     trim: true,
     index: true,        // Explicitly declare index — don't rely on autoIndex in prod
   })
-  email: string;
+  email!: string;
 
   @Prop({ required: true, minlength: 2, maxlength: 100, trim: true })
-  displayName: string;
+  displayName!: string;
 
   // ── Authentication ────────────────────────────────────────────────────────
   @Prop({ required: true, select: false }) // select: false = excluded from all queries by default
-  password: string;
+  password!: string;
 
   @Prop({ type: [RefreshToken], default: [] })
-  refreshTokens: RefreshToken[];
+  refreshTokens!: RefreshToken[];
 
   @Prop({ default: false })
-  isEmailVerified: boolean;
+  isEmailVerified!: boolean;
 
   @Prop({ type: String, select: false }) // Only fetched when explicitly needed
   emailVerificationToken?: string;
@@ -81,10 +80,10 @@ export class User extends Document {
     enum: Object.values(Role), // Constrain to the Role enum — rejects unknown roles at DB level
     default: [Role.USER],
   })
-  roles: Role[];
+  roles!: Role[];
 
   @Prop({ default: true })
-  isActive: boolean;
+  isActive!: boolean;
 
   // ── Audit ─────────────────────────────────────────────────────────────────
   @Prop({ type: Date })
