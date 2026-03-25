@@ -1,17 +1,18 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import { User, UserDocument } from '../users/schemas/user.schema';
+import { RefreshToken, User, UserDocument } from '../users/schemas/user.schema';
 import { JwtPayload } from './strategies/jwt.strategy';
+import { DeviceSessionOutput } from './dto/device-session.output';
 
 // The shape of data we embed in a refresh token (kept minimal intentionally).
 export interface RefreshTokenPayload {
-  sub: string;   // userId
-  jti: string;   // JWT ID — a unique ID for THIS specific token (used for reuse detection)
+  sub: string; // userId
+  jti: string; // JWT ID — a unique ID for THIS specific token (used for reuse detection)
   family: string; // Token family ID — all tokens in a rotation chain share this
 }
 
@@ -44,44 +45,44 @@ export class TokenService {
   // Long-lived (7d). We store only a HASH of this token in the DB, never the
   // raw value. This way, even if the database is compromised, the attacker
   // can't use stolen refresh tokens without also breaking bcrypt.
-  async generateRefreshToken(userId: string, existingFamily?: string): Promise<string> {
-    // jti (JWT ID) is a unique random identifier for this specific token.
-    // This is what lets us detect reuse: if a jti is presented that we've
-    // already marked as consumed, we know rotation was bypassed.
-    const jti = crypto.randomUUID();
+  // async generateRefreshToken(userId: string, existingFamily?: string): Promise<string> {
+  //   // jti (JWT ID) is a unique random identifier for this specific token.
+  //   // This is what lets us detect reuse: if a jti is presented that we've
+  //   // already marked as consumed, we know rotation was bypassed.
+  //   const jti = crypto.randomUUID();
 
-    // A token "family" groups all tokens in a single rotation chain.
-    // When we detect reuse of any token in a family, we revoke the entire family.
-    // This limits the damage of a stolen token to a single rotation cycle.
-    const family = existingFamily ?? crypto.randomUUID();
+  //   // A token "family" groups all tokens in a single rotation chain.
+  //   // When we detect reuse of any token in a family, we revoke the entire family.
+  //   // This limits the damage of a stolen token to a single rotation cycle.
+  //   const family = existingFamily ?? crypto.randomUUID();
 
-    const payload: RefreshTokenPayload = { sub: userId, jti, family };
+  //   const payload: RefreshTokenPayload = { sub: userId, jti, family };
 
-    const rawToken = this.jwtService.sign(payload, {
-      secret: this.config.get<string>('jwt.refreshSecret'),
-      expiresIn: this.config.get<string>('jwt.refreshExpiresIn'), // '7d'
-    });
+  //   const rawToken = this.jwtService.sign(payload, {
+  //     secret: this.config.get<string>('jwt.refreshSecret'),
+  //     expiresIn: this.config.get<string>('jwt.refreshExpiresIn'), // '7d'
+  //   });
 
-    // Hash before storing. We use a lower bcrypt cost (8 rounds) here compared
-    // to the password hash (12 rounds) because refresh tokens are already
-    // cryptographically random — they don't need the same brute-force protection
-    // that user-chosen passwords do. This makes token rotation faster.
-    const tokenHash = await bcrypt.hash(rawToken, 8);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  //   // Hash before storing. We use a lower bcrypt cost (8 rounds) here compared
+  //   // to the password hash (12 rounds) because refresh tokens are already
+  //   // cryptographically random — they don't need the same brute-force protection
+  //   // that user-chosen passwords do. This makes token rotation faster.
+  //   const tokenHash = await bcrypt.hash(rawToken, 8);
+  //   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Store the hash alongside its jti so we can find and verify it efficiently.
-    await this.userModel.findByIdAndUpdate(userId, {
-      $push: {
-        refreshTokens: { tokenHash, expiresAt, jti, family, isRevoked: false },
-      },
-    });
+  //   // Store the hash alongside its jti so we can find and verify it efficiently.
+  //   await this.userModel.findByIdAndUpdate(userId, {
+  //     $push: {
+  //       refreshTokens: { tokenHash, expiresAt, jti, family, isRevoked: false },
+  //     },
+  //   });
 
-    // Housekeeping: clean up expired tokens to prevent the array from growing
-    // unboundedly. We do this asynchronously — it's not on the critical path.
-    this.pruneExpiredTokens(userId).catch(() => {});
+  //   // Housekeeping: clean up expired tokens to prevent the array from growing
+  //   // unboundedly. We do this asynchronously — it's not on the critical path.
+  //   this.pruneExpiredTokens(userId).catch(() => {});
 
-    return rawToken;
-  }
+  //   return rawToken;
+  // }
 
   // ── Refresh Token Rotation ────────────────────────────────────────────────
   // This is the most security-critical method in the entire codebase.
@@ -117,9 +118,7 @@ export class TokenService {
 
     // Step 3: Find the matching token by comparing hashes.
     // We find candidates by family first (a smaller set), then verify the hash.
-    const familyTokens = user.refreshTokens.filter(
-      (t) => t.family === payload.family,
-    );
+    const familyTokens = user.refreshTokens.filter((t) => t.family === payload.family);
 
     // Look for a token in this family that matches our raw token.
     let matchedToken: (typeof user.refreshTokens)[0] | null = null;
@@ -141,9 +140,7 @@ export class TokenService {
         // Suspected theft — invalidate all tokens in this compromised family
         await this.revokeTokenFamily(user._id.toString(), payload.family);
       }
-      throw new UnauthorizedException(
-        'Refresh token has already been used. Please log in again.',
-      );
+      throw new UnauthorizedException('Refresh token has already been used. Please log in again.');
     }
 
     // Step 5: Check if this specific token has been explicitly revoked.
@@ -155,16 +152,20 @@ export class TokenService {
     // Doing this before the new issue means that if the new token generation fails,
     // the old token is already invalid — the user just has to log in again.
     // This is safer than the reverse, which could leave two valid tokens in circulation.
-    await this.userModel.findByIdAndUpdate(user._id, {
-      $set: { 'refreshTokens.$[elem].isRevoked': true },
-    }, {
-      arrayFilters: [{ 'elem.tokenHash': matchedToken.tokenHash }],
-    });
+    await this.userModel.findByIdAndUpdate(
+      user._id,
+      {
+        $set: { 'refreshTokens.$[elem].isRevoked': true },
+      },
+      {
+        arrayFilters: [{ 'elem.tokenHash': matchedToken.tokenHash }],
+      },
+    );
 
     // Step 7: Issue a new token pair, preserving the same family ID.
     const newRefreshToken = await this.generateRefreshToken(
       user._id.toString(),
-      payload.family, // Same family — the chain continues
+      { existingFamily: payload.family }, // Same family — the chain continues
     );
 
     const newAccessToken = this.generateAccessToken(user);
@@ -209,11 +210,117 @@ export class TokenService {
   getRefreshTokenCookieOptions() {
     const isProd = this.config.get('app.nodeEnv') === 'production';
     return {
-      httpOnly: true,       // JS cannot read this cookie — kills XSS token theft
-      secure: isProd,       // HTTPS only in production
-      sameSite: 'strict' as const,  // Prevents CSRF from using this cookie
+      httpOnly: true, // JS cannot read this cookie — kills XSS token theft
+      secure: isProd, // HTTPS only in production
+      sameSite: 'strict' as const, // Prevents CSRF from using this cookie
       path: '/api/v1/auth', // Cookie only sent to auth endpoints — minimal exposure
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
     };
+  }
+
+  // Add to src/modules/auth/token.service.ts
+
+  // ── Device Fingerprinting ─────────────────────────────────────────────────
+  // Parses a User-Agent string into a human-readable device name.
+  // We keep this simple — for production, consider the `ua-parser-js` package.
+  parseDeviceName(userAgent?: string): string {
+    if (!userAgent) return 'Unknown Device';
+    if (/iPhone|iPad/.test(userAgent)) return 'iOS Device';
+    if (/Android/.test(userAgent)) return 'Android Device';
+    if (/Windows/.test(userAgent)) return 'Windows Device';
+    if (/Mac/.test(userAgent)) return 'Mac Device';
+    if (/Linux/.test(userAgent)) return 'Linux Device';
+    return 'Unknown Device';
+  }
+
+  // ── List Active Device Sessions ───────────────────────────────────────────
+  // Returns all non-expired, non-revoked refresh tokens for a user,
+  // formatted as DeviceSessionOutput objects.
+  async listDeviceSessions(
+    userId: string,
+    currentDeviceId?: string,
+  ): Promise<DeviceSessionOutput[]> {
+    const user = await this.userModel.findById(userId).select('+refreshTokens').lean().exec();
+
+    if (!user) throw new NotFoundException('User not found.');
+
+    const now = new Date();
+    return (
+      user.refreshTokens
+        .filter((t) => !t.isRevoked && t.expiresAt > now && t.deviceId)
+        // Deduplicate by deviceId — a device may have multiple tokens in rotation.
+        // We show only the most recently used token per device.
+        .reduce((acc, token) => {
+          const existing = acc.find((t) => t.deviceId === token.deviceId);
+          if (!existing || token?.lastUsedAt! > existing.lastUsedAt) {
+            return [
+              ...acc.filter((t) => t.deviceId !== token.deviceId),
+              {
+                deviceId: token.deviceId!,
+                deviceName: token.deviceName,
+                userAgent: token.userAgent,
+                lastUsedAt: token.lastUsedAt ?? token.createdAt ?? now,
+                createdAt: token.createdAt ?? now,
+                isCurrent: token.deviceId === currentDeviceId,
+              },
+            ];
+          }
+          return acc;
+        }, [] as DeviceSessionOutput[])
+        .sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime())
+    );
+  }
+
+  // ── Revoke a Specific Device ──────────────────────────────────────────────
+  // This revokes ALL refresh tokens associated with a given deviceId.
+  // If the user wants to log out a specific device, this is the call.
+  async revokeDeviceSession(userId: string, deviceId: string): Promise<void> {
+    await this.userModel.findByIdAndUpdate(userId, {
+      $pull: { refreshTokens: { deviceId } },
+    });
+  }
+
+  // ── Updated: generateRefreshToken (with device metadata) ─────────────────
+  // The signature changes slightly to accept device context.
+  async generateRefreshToken(
+    userId: string,
+    options?: {
+      existingFamily?: string;
+      deviceId?: string;
+      userAgent?: string;
+    },
+  ): Promise<string> {
+    const jti = crypto.randomUUID();
+    const family = options?.existingFamily ?? crypto.randomUUID();
+    const deviceId = options?.deviceId ?? crypto.randomUUID();
+
+    const payload: RefreshTokenPayload = { sub: userId, jti, family };
+    const rawToken = this.jwtService.sign(payload, {
+      secret: this.config.get<string>('jwt.refreshSecret'),
+      expiresIn: this.config.get<string>('jwt.refreshExpiresIn'),
+    });
+
+    const tokenHash = await bcrypt.hash(rawToken, 8);
+    const now = new Date();
+
+    await this.userModel.findByIdAndUpdate(userId, {
+      $push: {
+        refreshTokens: {
+          tokenHash,
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+          isRevoked: false,
+          jti,
+          family,
+          deviceId,
+          deviceName: this.parseDeviceName(options?.userAgent),
+          userAgent: options?.userAgent,
+          lastUsedAt: now,
+          createdAt: now,
+        },
+      },
+    });
+
+    this.pruneExpiredTokens(userId).catch(() => {});
+    return rawToken;
   }
 }
