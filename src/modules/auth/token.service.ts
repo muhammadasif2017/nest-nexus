@@ -22,6 +22,15 @@ export class TokenService {
     private readonly prisma: PrismaService,
   ) {}
 
+  // Short-lived token (5 min) that signals 2FA is required before full access is granted.
+  // JwtAuthGuard rejects these on all routes that don't have @AllowPending2FA().
+  generatePendingTwoFactorToken(user: { id: string; email: string }): string {
+    return this.jwtService.sign(
+      { sub: user.id, email: user.email, roles: [], scope: 'two_factor_pending' },
+      { secret: this.config.get<string>('jwt.secret'), expiresIn: '5m' as any },
+    );
+  }
+
   generateAccessToken(user: { id: string; email: string; roles: string[] }): string {
     const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
       sub: user.id,

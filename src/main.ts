@@ -3,8 +3,15 @@ import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { getQueueToken } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUE_EMAIL } from './queues/queues.constants';
 
 import helmet from 'helmet';
+import { RequestMethod } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
 import compression from 'compression';
@@ -107,7 +114,10 @@ async function bootstrap() {
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
   // GraphQL lives at /graphql (unversioned by convention)
-  app.setGlobalPrefix('api');
+  // Exclude /metrics from the API prefix — Prometheus expects to scrape at bare /metrics
+  app.setGlobalPrefix('api', {
+    exclude: [{ path: 'metrics', method: RequestMethod.GET }],
+  });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   // ── Global Guards (applied to every route) ───────────────────────────────
@@ -150,6 +160,16 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document, {
       swaggerOptions: { persistAuthorization: true },
     });
+
+    // Bull Board — queue monitoring UI at /api/queues
+    const bullBoardAdapter = new ExpressAdapter();
+    bullBoardAdapter.setBasePath('/api/queues');
+    createBullBoard({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queues: [new BullMQAdapter(app.get<Queue>(getQueueToken(QUEUE_EMAIL))) as any],
+      serverAdapter: bullBoardAdapter,
+    });
+    app.use('/api/queues', bullBoardAdapter.getRouter());
   }
 
   await app.listen(PORT);
@@ -157,6 +177,7 @@ async function bootstrap() {
   console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
   if (NODE_ENV !== 'production') {
     console.log(`📖 Swagger docs at http://localhost:${PORT}/api/docs`);
+    console.log(`🐂 Bull Board at http://localhost:${PORT}/api/queues`);
   }
 }
 

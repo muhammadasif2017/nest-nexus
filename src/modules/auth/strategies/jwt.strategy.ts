@@ -8,6 +8,9 @@ export interface JwtPayload {
   sub: string;
   email: string;
   roles: string[];
+  // 'two_factor_pending' tokens are issued during login when 2FA is enabled.
+  // They are only accepted on routes decorated with @AllowPending2FA().
+  scope?: 'two_factor_pending';
   iat?: number;
   exp?: number;
 }

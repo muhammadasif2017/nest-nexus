@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterInput } from './dto/register.input';
@@ -59,16 +60,20 @@ const makeConfigMock = () => ({
   get: jest.fn().mockReturnValue('15m'),
 });
 
+const makeEventEmitterMock = () => ({ emit: jest.fn() });
+
 const makeService = () => {
   const prisma = makePrismaMock();
   const tokenService = makeTokenServiceMock();
   const config = makeConfigMock();
+  const eventEmitter = makeEventEmitterMock();
   const service = new AuthService(
     prisma as unknown as PrismaService,
     tokenService as any,
     config as unknown as ConfigService,
+    eventEmitter as unknown as EventEmitter2,
   );
-  return { service, prisma, tokenService, config };
+  return { service, prisma, tokenService, config, eventEmitter };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

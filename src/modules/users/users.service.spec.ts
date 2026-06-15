@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { UpdateUserInput } from './dto/update-user.input';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 // ── Raw DB document shape (mirrors Prisma User) ───────────────────────────────
 
@@ -45,14 +46,21 @@ const makeLoaderMock = () => ({
 
 // ── Factory ───────────────────────────────────────────────────────────────────
 
+const makeEventEmitterMock = () => ({ emit: jest.fn() });
+const makeCacheMock = () => ({ get: jest.fn().mockResolvedValue(undefined), set: jest.fn().mockResolvedValue(undefined), del: jest.fn().mockResolvedValue(undefined) });
+
 const makeService = () => {
   const prisma = makePrismaMock();
   const loader = makeLoaderMock();
+  const eventEmitter = makeEventEmitterMock();
+  const cache = makeCacheMock();
   const service = new UsersService(
     prisma as unknown as PrismaService,
     loader as any,
+    eventEmitter as unknown as EventEmitter2,
+    cache as any,
   );
-  return { service, prisma, loader };
+  return { service, prisma, loader, eventEmitter, cache };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

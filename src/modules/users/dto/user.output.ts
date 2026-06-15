@@ -42,6 +42,11 @@ export class UserOutput {
   @Field({ nullable: true })
   @ApiProperty({ required: false, nullable: true })
   @Expose()
+  avatarUrl?: string;
+
+  @Field({ nullable: true })
+  @ApiProperty({ required: false, nullable: true })
+  @Expose()
   lastLoginAt?: Date;
 
   @Field()

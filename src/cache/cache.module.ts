@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { CacheModule as NestCacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import KeyvRedis from '@keyv/redis';
+import { CacheInvalidationService } from './cache-invalidation.service';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import KeyvRedis from '@keyv/redis';
       },
     }),
   ],
+  providers: [CacheInvalidationService],
   exports: [NestCacheModule],
 })
 export class CacheModule {}

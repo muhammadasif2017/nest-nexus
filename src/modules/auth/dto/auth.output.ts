@@ -26,4 +26,11 @@ export class AuthOutput {
   @ApiProperty({ description: 'ISO timestamp when the access token expires.' })
   @Expose()
   accessTokenExpiresAt!: Date;
+
+  // True when 2FA is enabled and the token has scope='two_factor_pending'.
+  // Client must call POST /auth/2fa/verify with the TOTP code to receive a full token.
+  @Field(() => Boolean, { nullable: true })
+  @ApiProperty({ required: false, description: 'True if 2FA verification is still required.' })
+  @Expose()
+  isTwoFactorPending?: boolean;
 }
