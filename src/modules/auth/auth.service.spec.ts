@@ -4,46 +4,45 @@ import {
   ForbiddenException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
 import { AuthService } from './auth.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterInput } from './dto/register.input';
 import { LoginInput } from './dto/login.input';
 
 // ── bcrypt mock ───────────────────────────────────────────────────────────────
-jest.mock('bcrypt', () => ({ compare: jest.fn() }));
-import * as bcrypt from 'bcrypt';
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+  hash: jest.fn().mockResolvedValue('hashed-password'),
+}));
+
+const bcryptCompare = bcrypt.compare as jest.Mock;
+const bcryptHash = bcrypt.hash as jest.Mock;
 
 // ── Factories ─────────────────────────────────────────────────────────────────
 
-const makeUserDoc = (overrides: Record<string, unknown> = {}) => {
-  const base = {
-    _id: { toString: () => 'user-id-1' },
-    email: 'user@test.com',
-    displayName: 'Test User',
-    roles: ['user'],
-    isEmailVerified: false,
-    isActive: true,
-    password: '$2b$12$hashedpassword',
-    refreshTokens: [],
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-01'),
-    ...overrides,
-  };
-  return { ...base, toObject: () => ({ ...base }) };
-};
+const makeUserDoc = (overrides: Record<string, unknown> = {}) => ({
+  id: 'user-id-1',
+  email: 'user@test.com',
+  displayName: 'Test User',
+  roles: ['user'],
+  isEmailVerified: false,
+  isActive: true,
+  password: '$2b$12$hashedpassword',
+  createdAt: new Date('2024-01-01'),
+  updatedAt: new Date('2024-01-01'),
+  lastLoginAt: null,
+  ...overrides,
+});
 
-const makeModelMock = () => {
-  const exec = jest.fn().mockResolvedValue(null);
-  const select = jest.fn().mockReturnValue({ exec });
-
-  return {
-    exists: jest.fn(),
-    create: jest.fn(),
-    findOne: jest.fn().mockReturnValue({ select }),
-    findByIdAndUpdate: jest.fn().mockReturnValue({ exec }),
-    _exec: exec,
-    _select: select,
-  };
-};
+const makePrismaMock = () => ({
+  user: {
+    findUnique: jest.fn().mockResolvedValue(null),
+    create: jest.fn().mockResolvedValue(makeUserDoc()),
+    update: jest.fn().mockResolvedValue(makeUserDoc()),
+  },
+});
 
 const makeTokenServiceMock = () => ({
   generateAccessToken: jest.fn().mockReturnValue('mock-access-token'),
@@ -61,17 +60,24 @@ const makeConfigMock = () => ({
 });
 
 const makeService = () => {
-  const model = makeModelMock();
+  const prisma = makePrismaMock();
   const tokenService = makeTokenServiceMock();
   const config = makeConfigMock();
-  const service = new AuthService(model as any, tokenService as any, config as any);
-  return { service, model, tokenService, config };
+  const service = new AuthService(
+    prisma as unknown as PrismaService,
+    tokenService as any,
+    config as unknown as ConfigService,
+  );
+  return { service, prisma, tokenService, config };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('AuthService', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    bcryptHash.mockResolvedValue('hashed-password');
+  });
 
   // ── register ────────────────────────────────────────────────────────────────
 
@@ -83,101 +89,88 @@ describe('AuthService', () => {
     };
 
     it('throws ConflictException when email already exists', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue({ _id: 'existing-id' });
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ id: 'existing-id' });
       await expect(service.register(dto)).rejects.toThrow(ConflictException);
     });
 
-    it('checks email in lowercase', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+    it('checks email in lowercase via findUnique', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       await service.register(dto);
-
-      expect(model.exists).toHaveBeenCalledWith({ email: 'new@test.com' });
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'new@test.com' } }),
+      );
     });
 
     it('creates user with lowercased email', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       await service.register(dto);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ email: 'new@test.com' }) }),
+      );
+    });
 
-      expect(model.create).toHaveBeenCalledWith(
-        expect.objectContaining({ email: 'new@test.com' }),
+    it('hashes password before creating user', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      await service.register(dto);
+      expect(bcryptHash).toHaveBeenCalledWith('P@ssw0rd!', 12);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ password: 'hashed-password' }) }),
       );
     });
 
     it('does not create user when email exists', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue({ _id: 'existing-id' });
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ id: 'existing-id' });
       await expect(service.register(dto)).rejects.toThrow();
-      expect(model.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
     });
 
     it('returns auth output with accessToken', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       const result = await service.register(dto);
-
       expect(result.auth.accessToken).toBe('mock-access-token');
     });
 
     it('returns refreshToken', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       const result = await service.register(dto);
-
       expect(result.refreshToken).toBe('mock-refresh-token');
     });
 
     it('returns user output inside auth', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       const result = await service.register(dto);
-
       expect(result.auth.user).toBeDefined();
       expect(result.auth.user.email).toBe('user@test.com');
     });
 
     it('accessTokenExpiresAt is a Date', async () => {
-      const { service, model } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       const result = await service.register(dto);
-
       expect(result.auth.accessTokenExpiresAt).toBeInstanceOf(Date);
     });
 
-    it('calls generateAccessToken with the user document', async () => {
-      const { service, model, tokenService } = makeService();
-      model.exists.mockResolvedValue(null);
+    it('calls generateAccessToken with the created user', async () => {
+      const { service, prisma, tokenService } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       const userDoc = makeUserDoc();
-      model.create.mockResolvedValue(userDoc);
-
+      prisma.user.create.mockResolvedValue(userDoc);
       await service.register(dto);
-
       expect(tokenService.generateAccessToken).toHaveBeenCalledWith(userDoc);
     });
 
     it('calls generateRefreshToken with the user id', async () => {
-      const { service, model, tokenService } = makeService();
-      model.exists.mockResolvedValue(null);
-      model.create.mockResolvedValue(makeUserDoc());
-
+      const { service, prisma, tokenService } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       await service.register(dto);
-
       expect(tokenService.generateRefreshToken).toHaveBeenCalledWith('user-id-1');
     });
   });
@@ -188,111 +181,88 @@ describe('AuthService', () => {
     const dto: LoginInput = { email: 'User@Test.COM', password: 'P@ssw0rd!' };
 
     it('queries with lowercased email', async () => {
-      const { service, model } = makeService();
-      const user = makeUserDoc();
-      model._exec.mockResolvedValue(user);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
       await service.login(dto);
-
-      expect(model.findOne).toHaveBeenCalledWith({ email: 'user@test.com' });
-    });
-
-    it('selects +password field', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
-      await service.login(dto);
-
-      expect(model._select).toHaveBeenCalledWith('+password');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'user@test.com' } }),
+      );
     });
 
     it('throws UnauthorizedException when user not found', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(null);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('still calls bcrypt.compare when user not found (timing attack prevention)', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(null);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow();
-
-      expect(bcrypt.compare).toHaveBeenCalled();
+      expect(bcryptCompare).toHaveBeenCalled();
     });
 
     it('throws UnauthorizedException when password is wrong', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
     });
 
     it('error message does not reveal whether email exists', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(null);
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow('Invalid email or password.');
     });
 
     it('throws ForbiddenException for deactivated account', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc({ isActive: false }));
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc({ isActive: false }));
+      bcryptCompare.mockResolvedValue(true);
       await expect(service.login(dto)).rejects.toThrow(ForbiddenException);
     });
 
     it('returns auth output on success', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
       const result = await service.login(dto);
-
       expect(result.auth.accessToken).toBe('mock-access-token');
       expect(result.refreshToken).toBe('mock-refresh-token');
     });
 
     it('returns user inside auth on success', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
       const result = await service.login(dto);
-
       expect(result.auth.user).toBeDefined();
     });
 
     it('fires lastLoginAt update without blocking response', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
+      prisma.user.update.mockResolvedValue(makeUserDoc());
       const result = await service.login(dto, '1.2.3.4');
-
-      // Result returned successfully — fire-and-forget did not block
       expect(result).toBeDefined();
-      expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ $set: expect.objectContaining({ lastLoginIp: '1.2.3.4' }) }),
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'user-id-1' },
+          data: expect.objectContaining({ lastLoginIp: '1.2.3.4' }),
+        }),
       );
     });
 
     it('accessTokenExpiresAt is a Date', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(makeUserDoc());
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
       const result = await service.login(dto);
-
       expect(result.auth.accessTokenExpiresAt).toBeInstanceOf(Date);
     });
   });
@@ -302,17 +272,13 @@ describe('AuthService', () => {
   describe('logout()', () => {
     it('delegates to tokenService.revokeAllTokens', async () => {
       const { service, tokenService } = makeService();
-
       await service.logout('user-id-1');
-
       expect(tokenService.revokeAllTokens).toHaveBeenCalledWith('user-id-1');
     });
 
     it('resolves without returning a value', async () => {
       const { service } = makeService();
-
       const result = await service.logout('user-id-1');
-
       expect(result).toBeUndefined();
     });
   });
@@ -322,41 +288,31 @@ describe('AuthService', () => {
   describe('refresh()', () => {
     it('delegates to tokenService.rotateRefreshToken', async () => {
       const { service, tokenService } = makeService();
-
       await service.refresh('old-refresh-token');
-
       expect(tokenService.rotateRefreshToken).toHaveBeenCalledWith('old-refresh-token');
     });
 
     it('returns new accessToken', async () => {
       const { service } = makeService();
-
       const result = await service.refresh('old-refresh-token');
-
       expect(result.auth.accessToken).toBe('rotated-access');
     });
 
     it('returns new refreshToken', async () => {
       const { service } = makeService();
-
       const result = await service.refresh('old-refresh-token');
-
       expect(result.refreshToken).toBe('rotated-refresh');
     });
 
     it('accessTokenExpiresAt is a Date', async () => {
       const { service } = makeService();
-
       const result = await service.refresh('old-refresh-token');
-
       expect(result.auth.accessTokenExpiresAt).toBeInstanceOf(Date);
     });
 
     it('reads jwt.expiresIn from config', async () => {
       const { service, config } = makeService();
-
       await service.refresh('old-refresh-token');
-
       expect(config.get).toHaveBeenCalledWith('jwt.expiresIn');
     });
   });

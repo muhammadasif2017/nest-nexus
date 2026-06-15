@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { IncomingMessage, ServerResponse } from 'http';
 
 @Module({
   imports: [
@@ -40,26 +41,27 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
             // Attach a unique request ID to every log line emitted during
             // that request's lifecycle. This is how you trace a single user
             // request across 50 log lines without losing context.
-            genReqId: (req) => req.headers['x-request-id'] ?? crypto.randomUUID(),
+            genReqId: (req: IncomingMessage) =>
+              (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
 
             // Customize what gets logged per request — keep it minimal.
             // Avoid logging large request/response bodies here; use your
             // LoggingInterceptor for that with explicit truncation.
-            customLogLevel: (req, res, err) => {
+            customLogLevel: (req: IncomingMessage, res: ServerResponse, err: Error | undefined) => {
               if (err || res.statusCode >= 500) return 'error';
               if (res.statusCode >= 400) return 'warn';
               return 'info';
             },
 
             serializers: {
-              req: (req) => ({
+              req: (req: IncomingMessage & { id?: string }) => ({
                 id: req.id,
                 method: req.method,
                 url: req.url,
                 // Never serialize the full headers object — too noisy, and risky
                 userAgent: req.headers['user-agent'],
               }),
-              res: (res) => ({
+              res: (res: ServerResponse) => ({
                 statusCode: res.statusCode,
               }),
             },

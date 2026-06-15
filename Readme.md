@@ -13,8 +13,9 @@ be extended without being rewritten.
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| **Framework** | NestJS 10 | Module system, DI container, decorators |
-| **Database** | MongoDB + Mongoose | Primary data store with schema hooks |
+| **Framework** | NestJS 11 | Module system, DI container, decorators |
+| **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
+| **Query Insights** | @prisma/sqlcommenter | SQL comment annotations for Cloud SQL Query Insights |
 | **API** | GraphQL (Apollo) + REST | Dual API surface, code-first schema |
 | **Real-time** | Socket.io + SSE | WebSocket gateway + server-sent events |
 | **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
@@ -55,12 +56,13 @@ npm install
 cp .env.example .env
 ```
 
-Open `.env` and fill in the required values. The three you must set before anything works:
+Open `.env` and fill in the required values. The four you must set before anything works:
 
 ```bash
-SESSION_SECRET=    # 64-char random hex: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-JWT_SECRET=        # 64-char random hex (different from SESSION_SECRET)
-JWT_REFRESH_SECRET=# 64-char random hex (different from both above)
+SESSION_SECRET=     # 64-char random hex: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+JWT_SECRET=         # 64-char random hex (different from SESSION_SECRET)
+JWT_REFRESH_SECRET= # 64-char random hex (different from both above)
+DATABASE_URL=       # postgresql://user:password@localhost:5432/nest_nexus
 ```
 
 Everything else has a safe default for local development.
@@ -68,14 +70,23 @@ Everything else has a safe default for local development.
 ### 3. Start the infrastructure
 
 ```bash
-# Start MongoDB, Redis, MinIO, and ClamAV
-docker-compose up -d mongo redis minio clamav
+# Start PostgreSQL, Redis, MinIO, and ClamAV
+docker-compose up -d postgres redis minio clamav
 
 # Verify all services are healthy
 docker-compose ps
 ```
 
-### 4. Run the application
+### 4. Run database migrations
+
+```bash
+# Apply all migrations and generate the Prisma client
+npx prisma migrate dev
+
+# (First run only) If the database does not exist yet, Prisma will create it
+```
+
+### 5. Run the application
 
 ```bash
 # Development (hot reload)
@@ -85,7 +96,7 @@ npm run start:dev
 npm run build && npm start
 ```
 
-### 5. Verify it's working
+### 6. Verify it's working
 
 ```bash
 # Health check
@@ -93,6 +104,9 @@ curl http://localhost:3000/api/v1/health/ready
 
 # GraphQL Playground
 open http://localhost:3000/graphql
+
+# Swagger API docs
+open http://localhost:3000/api/docs
 
 # Queue dashboard
 open http://localhost:3000/admin/queues
@@ -118,13 +132,17 @@ src/
 │
 ├── config/                          # Typed, Zod-validated environment config
 │   ├── app.config.ts
-│   ├── database.config.ts
+│   ├── database.config.ts           # DATABASE_URL for Prisma
 │   ├── redis.config.ts
 │   ├── jwt.config.ts
 │   ├── oauth.config.ts
 │   ├── storage.config.ts
 │   ├── alerts.config.ts
 │   └── config.validation.ts         # Zod schema — app refuses to start if invalid
+│
+├── prisma/                          # Prisma connection layer
+│   ├── prisma.service.ts            # PrismaClient wrapper (OnModuleInit/Destroy)
+│   └── prisma.module.ts             # @Global() — no per-module import needed
 │
 ├── common/                          # Shared, zero-business-logic primitives
 │   ├── decorators/                  # @CurrentUser(), @Roles(), @Public(), @AllowPending2FA()
@@ -133,7 +151,7 @@ src/
 │   ├── guards/                      # JwtAuthGuard, RolesGuard (both context-aware)
 │   └── interceptors/                # LoggingInterceptor, SerializeInterceptor
 │
-├── database/                        # MongoDB connection (forRootAsync)
+├── database/                        # Re-exports PrismaModule for legacy import compatibility
 ├── cache/                           # Redis CacheModule + CacheInvalidationService
 ├── logger/                          # Pino logger with request redaction
 ├── events/                          # EventEmitter2 (wildcard, global)
@@ -146,8 +164,13 @@ src/
 │
 └── modules/                         # Feature modules (one per domain)
     ├── auth/                        # JWT, sessions, OAuth2, TOTP, magic links
-    ├── users/                       # UserSchema, DataLoader, serialization
+    ├── users/                       # DataLoader, serialization
     └── notifications/               # WebSocket gateway, SSE, fan-out delivery
+
+prisma/
+├── schema.prisma                    # Single source of truth: User, RefreshToken, OauthProvider
+├── prisma.config.ts                 # Prisma 7 runtime config (DATABASE_URL, migrations path)
+└── migrations/                      # Auto-generated SQL migrations (committed to version control)
 ```
 
 ---
@@ -165,8 +188,8 @@ in exactly one dimension, which makes the tradeoffs explicit.
 
 The JWT path (stateless Bearer tokens + HttpOnly refresh cookie) serves API clients — mobile
 apps, SPAs, third-party integrations — that manage their own session state. The session path
-(server-side sessions in MongoDB via express-session) serves traditional web clients where
-the server holds state. Both paths share the same `AuthService` and converge on the same
+(server-side sessions in PostgreSQL via `connect-pg-simple`) serves traditional web clients
+where the server holds state. Both paths share the same `AuthService` and converge on the same
 `req.user` object that guards and decorators read from.
 
 ### Refresh token rotation with reuse detection
@@ -176,6 +199,13 @@ already-used token is presented — the signature of a stolen token being replay
 entire token *family* is immediately revoked, forcing a full re-login. The family concept
 means a single stolen token can't silently persist access; the moment it's used, the
 legitimate user's next refresh triggers full revocation.
+
+Tokens are stored as bcrypt hashes (cost 8) in a dedicated `RefreshToken` table with a
+FK to `User`. Cost 8 (vs 12 for passwords) is intentional: cryptographically random tokens
+derive their brute-force resistance from entropy, not work factor — keeping rotation latency
+low while remaining storage-safe against database compromise.
+
+See ADR-002 for the reuse-detection algorithm and ADR-008 for the storage decision.
 
 ### Guards are context-aware
 
@@ -190,8 +220,10 @@ after the WebSocket upgrade.
 A single `GlobalExceptionFilter` handles both REST and GraphQL. For HTTP contexts it sets
 the response status code and returns a consistent JSON envelope. For GraphQL contexts it
 returns a `GraphQLError` with structured `extensions.code` — because GraphQL always returns
-HTTP 200, and error information travels in the response body. Apollo's `formatError` runs as
-a final pass to strip stack traces in production.
+HTTP 200, and error information travels in the response body.
+
+Prisma errors are translated automatically: `P2002` (unique constraint) → 409 Conflict,
+`P2025` (record not found on update/delete) → 404 Not Found.
 
 ### Cache invalidation is event-driven and cross-instance
 
@@ -223,7 +255,7 @@ parts in parallel, NestJS completes the assembly. All three patterns write to th
 
 Layer 1 is automatic retry with exponential backoff — handles transient failures (network
 blips, momentary Redis timeouts). Layer 2 is the dead-letter store — on final failure,
-the job is persisted to MongoDB, classified by error type (transient, permanent, external),
+the job is persisted, classified by error type (transient, permanent, external),
 and an alert is fired for critical queues. Operators can inspect, acknowledge, and replay
 dead-letter jobs without touching the database directly.
 
@@ -247,9 +279,9 @@ POST /graphql { mutation login(input) }
 POST /api/v1/auth/refresh (refresh_token cookie sent automatically)
   → TokenService.rotateRefreshToken()
     → Verify JWT signature
-    → Find matching bcrypt hash in user.refreshTokens
+    → Find matching bcrypt hash in RefreshToken table (WHERE userId + family)
     → REUSE DETECTED? → revoke entire token family → force re-login
-    → Mark old token consumed → issue new token pair
+    → Mark old token isRevoked=true → issue new token pair
   → New refresh token → replaces HttpOnly cookie
   → New access token → response body
 ```
@@ -258,7 +290,7 @@ POST /api/v1/auth/refresh (refresh_token cookie sent automatically)
 
 ```
 GET /api/v1/auth/google          → redirects to Google consent screen
-GET /api/v1/auth/google/callback → Passport verifies, OAuthService upserts user
+GET /api/v1/auth/google/callback → Passport verifies, OAuthService upserts OauthProvider row
                                  → issues token pair → redirects to frontend
                                    with access token in URL fragment (#token=...)
 ```
@@ -313,11 +345,11 @@ Client                              Server
 GET /api/v1/notifications/stream
   → Creates per-user RxJS Subject
   → Returns Observable<MessageEvent> (NestJS keeps connection open)
-  → Each event carries id: (MongoDB ObjectId)
+  → Each event carries id: (notification UUID)
 
 On reconnect (browser sends Last-Event-ID header automatically):
   → findMissedNotifications(userId, lastEventId)
-  → MongoDB: { _id: { $gt: ObjectId(lastEventId) } }
+  → PostgreSQL: WHERE id > lastEventId ORDER BY createdAt ASC
   → Replays missed events → resumes live stream
 ```
 
@@ -339,7 +371,7 @@ Worker.process()
   → On final failure:
       → DeadLetterService.handleFailedJob()
           → Classify error (transient / permanent / external)
-          → Persist to MongoDB dead-letter collection
+          → Persist to dead-letter store
           → Webhook alert for critical queues
 ```
 
@@ -403,7 +435,7 @@ Pre-provisioned dashboards load automatically at startup (no manual import requi
 
 - **API Overview** — request rate, error rate, P95/P99 latency by route
 - **Queue Health** — depth, throughput, failure rate per queue
-- **Infrastructure** — Redis memory, MongoDB operation rate, disk usage
+- **Infrastructure** — Redis memory, PostgreSQL query rate and connection pool, disk usage
 - **Security** — auth event rate, failed login spikes, rate limit triggers
 
 ---
@@ -416,7 +448,7 @@ See `.env.example` for the complete annotated reference. Required variables:
 SESSION_SECRET          # 64-char random hex
 JWT_SECRET              # 64-char random hex
 JWT_REFRESH_SECRET      # 64-char random hex (different from JWT_SECRET)
-MONGODB_URI             # MongoDB connection string
+DATABASE_URL            # postgresql://user:password@host:5432/dbname
 ```
 
 Optional variables enable additional features:
@@ -442,6 +474,11 @@ npm run test:e2e      # End-to-end tests
 npm run test:cov      # Tests with coverage report
 npm run typecheck     # TypeScript type check without emitting
 npm run lint          # ESLint with auto-fix
+
+npx prisma migrate dev          # Create and apply a new migration (dev)
+npx prisma migrate deploy       # Apply pending migrations (CI / production)
+npx prisma studio               # Browse and edit data in the browser
+npx prisma generate             # Regenerate the Prisma client after schema changes
 ```
 
 ---
@@ -453,7 +490,7 @@ npm run lint          # ESLint with auto-fix
 docker-compose up -d
 
 # Start only infrastructure (run app locally for hot reload)
-docker-compose up -d mongo redis minio clamav
+docker-compose up -d postgres redis minio clamav
 
 # Start with observability stack
 docker-compose --profile observability up -d
@@ -483,13 +520,14 @@ nest generate resolver modules/orders   # For GraphQL
 
 Follow the existing module pattern:
 
-1. Define the Mongoose schema in `schemas/`
-2. Define input DTOs in `dto/` with class-validator decorators
-3. Define the output DTO in `dto/` with `@Expose()` and `@ObjectType()`
-4. Implement the service (inject `CacheService` for cacheable reads)
-5. Emit domain events via `EventEmitter2` after every mutation
-6. Implement the resolver or controller
-7. Register the module in `app.module.ts`
+1. Add the model to `prisma/schema.prisma`
+2. Run `npx prisma migrate dev --name add-orders` to generate and apply the migration
+3. Define input DTOs in `dto/` with class-validator decorators
+4. Define the output DTO in `dto/` with `@Expose()` and `@ObjectType()`
+5. Implement the service — inject `PrismaService` directly (it's `@Global()`)
+6. Emit domain events via `EventEmitter2` after every mutation
+7. Implement the resolver or controller
+8. Register the module in `app.module.ts`
 
 ### Adding a new queue
 
@@ -516,7 +554,7 @@ Before deploying to production, verify:
 
 - [ ] All secrets in `.env` are unique, random, and at least 32 characters
 - [ ] `NODE_ENV=production` is set (enables HTTPS-only cookies, strict CSP, removes Apollo Sandbox)
-- [ ] MongoDB is not publicly accessible (firewall rules or VPC)
+- [ ] PostgreSQL is not publicly accessible (firewall rules or VPC)
 - [ ] Redis is password-protected (`requirepass` in `redis.conf`)
 - [ ] S3 bucket blocks public access except for explicitly public prefixes
 - [ ] `/admin/queues` (Bull Board) is behind IP allowlist or admin-only auth
@@ -525,6 +563,7 @@ Before deploying to production, verify:
 - [ ] ClamAV signatures are updating automatically (`CLAMAV_NO_FRESHCLAMD=false`)
 - [ ] Rate limiting thresholds are tuned for expected traffic patterns
 - [ ] Grafana admin password is changed from the default
+- [ ] `prisma migrate deploy` (not `migrate dev`) is used in production CI pipelines
 
 ---
 

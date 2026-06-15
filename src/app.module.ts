@@ -2,7 +2,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 // Config factories (typed, validated)
 import appConfig from './config/app.config';
@@ -23,7 +24,7 @@ import { HealthModule } from './health/health.module';
 // Feature modules (one per domain)
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationsModule } from './modules/notifications/notification.module';
 
 @Module({
   imports: [
@@ -69,12 +70,13 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
   ],
 
   providers: [
-    // ── Global Rate Limiting Guard ─────────────────────────────────────────
-    // Registering ThrottlerGuard as APP_GUARD applies it to EVERY route globally.
-    // This is the correct pattern — avoids decorating every controller.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
     },
   ],
 })

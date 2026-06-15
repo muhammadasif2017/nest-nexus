@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                       String    @id @default(uuid())
+  email                    String    @unique
+  displayName              String    @db.VarChar(100)
+  password                 String?
+  isEmailVerified          Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  roles                    String[]  @default(["user"])
+  isActive                 Boolean   @default(true)
+  lastLoginAt              DateTime?
+  lastLoginIp              String?
+  twoFactorSecret          String?
+  isTwoFactorEnabled       Boolean   @default(false)
+  twoFactorBackupCodes     String[]  @default([])
+  magicLinkTokenHash       String?
+  magicLinkExpiresAt       DateTime?
+  hasPassword              Boolean   @default(true)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  refreshTokens  RefreshToken[]
+  oauthProviders OauthProvider[]
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String
+  expiresAt  DateTime
+  isRevoked  Boolean   @default(false)
+  jti        String    @unique
+  family     String
+  deviceId   String?
+  deviceName String?
+  userAgent  String?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+  @@index([family])
+  @@index([userId])
+}
+
+model OauthProvider {
+  id            String  @id @default(uuid())
+  userId        String
+  provider      String
+  providerId    String
+  providerEmail String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}

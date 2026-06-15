@@ -18,7 +18,7 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
         (request: Request) => request?.cookies?.['refresh_token'] ?? null,
       ]),
       ignoreExpiration: false,
-      secretOrKey: config.get<string>('jwt.refreshSecret'),
+      secretOrKey: config.get<string>('jwt.refreshSecret')!,
       // passReqToCallback: true lets us access the raw token in validate(),
       // which we need to do the bcrypt comparison against stored hashes.
       passReqToCallback: true,
