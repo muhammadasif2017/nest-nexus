@@ -1,6 +1,7 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 import helmet from 'helmet';
@@ -131,9 +132,28 @@ async function bootstrap() {
     new LoggingInterceptor(app.get(PinoLogger)), // Logs request/response pairs with timing
   );
 
+  // ── Swagger (non-production only) ─────────────────────────────────────────
+  if (NODE_ENV !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('nest-nexus API')
+      .setDescription('REST endpoints for nest-nexus. GraphQL lives at /graphql.')
+      .setVersion('1.0')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'access-token')
+      .addCookieAuth('refresh_token', { type: 'apiKey', in: 'cookie', name: 'refresh_token' }, 'refresh-token')
+      .build();
+
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+  }
+
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
   console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
+  if (NODE_ENV !== 'production') {
+    console.log(`📖 Swagger docs at http://localhost:${PORT}/api/docs`);
+  }
 }
 
 bootstrap();

@@ -3,28 +3,36 @@ import {
   UseGuards, Get,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import {
+  ApiTags, ApiOperation, ApiResponse, ApiBearerAuth,
+  ApiCookieAuth, ApiBody,
+} from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginInput } from './dto/login.input';
 import { RegisterInput } from './dto/register.input';
+import { AuthOutput } from './dto/auth.output';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './strategies/jwt.strategy';
 
-// Version(1) ensures this maps to /api/v1/auth/*
-// The session-based flow is the same base URL as the JWT flow intentionally —
-// clients choose their flow by which endpoint they call.
+@ApiTags('auth')
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  // ── JWT: Register (returns tokens) ───────────────────────────────────────
   @Post('register')
   @Public()
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Register a new user', description: 'Creates account and returns JWT access token. Refresh token set as HttpOnly cookie.' })
+  @ApiBody({ type: RegisterInput })
+  @ApiResponse({ status: 201, description: 'Registration successful.', type: AuthOutput })
+  @ApiResponse({ status: 400, description: 'Validation failed.' })
+  @ApiResponse({ status: 409, description: 'Email already in use.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
   async register(
     @Body() dto: RegisterInput,
     @Res({ passthrough: true }) res: Response,
@@ -36,11 +44,15 @@ export class AuthController {
     return auth; // NestJS serializes this via the global ClassSerializerInterceptor
   }
 
-  // ── JWT: Login (returns tokens + sets cookie) ────────────────────────────
   @Post('login')
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Login with email + password', description: 'Returns JWT access token. Refresh token set as HttpOnly cookie.' })
+  @ApiBody({ type: LoginInput })
+  @ApiResponse({ status: 200, description: 'Login successful.', type: AuthOutput })
+  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
   async login(
     @Body() dto: LoginInput,
     @Req() req: Request,
@@ -51,10 +63,13 @@ export class AuthController {
     return auth;
   }
 
-  // ── JWT: Refresh ─────────────────────────────────────────────────────────
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rotate refresh token', description: 'Reads refresh token from HttpOnly cookie, issues new token pair. Old refresh token is revoked.' })
+  @ApiCookieAuth('refresh-token')
+  @ApiResponse({ status: 200, description: 'Tokens rotated.', type: AuthOutput })
+  @ApiResponse({ status: 401, description: 'Missing or invalid refresh token.' })
   async refresh(
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
@@ -72,9 +87,12 @@ export class AuthController {
     return auth;
   }
 
-  // ── JWT: Logout ───────────────────────────────────────────────────────────
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Logout', description: 'Revokes all refresh tokens for the authenticated user and clears the cookie.' })
+  @ApiResponse({ status: 204, description: 'Logged out.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
   async logout(
     @CurrentUser() user: JwtPayload,
     @Res({ passthrough: true }) res: Response,
@@ -84,14 +102,15 @@ export class AuthController {
     // 204 No Content — nothing to return after logout
   }
 
-  // ── Session: Login (creates server-side session) ──────────────────────────
-  // This endpoint is for traditional web clients. The session ID is stored in
-  // an HttpOnly cookie managed entirely by express-session. The client doesn't
-  // receive any tokens — the session cookie IS the credential.
   @Post('session/login')
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Session-based login', description: 'For traditional web clients. Sets HttpOnly session cookie — no tokens returned.' })
+  @ApiBody({ type: LoginInput })
+  @ApiResponse({ status: 200, description: 'Session created.' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
   async sessionLogin(
     @Body() dto: LoginInput,
     @Req() req: Request,
@@ -116,10 +135,11 @@ export class AuthController {
     return { message: 'Logged in successfully.', user: auth.user };
   }
 
-  // ── Session: Logout ───────────────────────────────────────────────────────
   @Post('session/logout')
-  @Public() // Session guard handles this separately
+  @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Session-based logout', description: 'Destroys the server-side session.' })
+  @ApiResponse({ status: 204, description: 'Session destroyed.' })
   async sessionLogout(@Req() req: Request) {
     await new Promise<void>((resolve, reject) => {
       req.session.destroy((err) => {
@@ -129,8 +149,11 @@ export class AuthController {
     });
   }
 
-  // ── Authenticated: Get current user ──────────────────────────────────────
   @Get('me')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Get current user', description: 'Returns the JWT payload of the authenticated user.' })
+  @ApiResponse({ status: 200, description: 'Current user payload.' })
+  @ApiResponse({ status: 401, description: 'Not authenticated.' })
   async getMe(@CurrentUser() user: JwtPayload) {
     return user;
   }

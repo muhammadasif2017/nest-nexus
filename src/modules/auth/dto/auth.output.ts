@@ -1,4 +1,5 @@
 import { ObjectType, Field } from '@nestjs/graphql';
+import { ApiProperty } from '@nestjs/swagger';
 import { Expose, Exclude } from 'class-transformer';
 import { UserOutput } from '../../users/dto/user.output';
 
@@ -10,20 +11,17 @@ import { UserOutput } from '../../users/dto/user.output';
 @Exclude()
 export class AuthOutput {
   @Field()
+  @ApiProperty({ description: 'Short-lived JWT access token. Store in memory, not localStorage.' })
   @Expose()
-  // Short-lived JWT: the client stores this in memory (NOT localStorage).
-  // localStorage is vulnerable to XSS; memory storage means the token is
-  // lost on page refresh, but that's fine because the refresh token in the
-  // HttpOnly cookie will silently issue a new one.
   accessToken!: string;
 
   @Field(() => UserOutput)
+  @ApiProperty({ type: () => UserOutput })
   @Expose()
   user!: UserOutput;
 
-  // accessTokenExpiresAt: so the client knows when to proactively refresh
-  // before the 401 hits, improving UX.
   @Field()
+  @ApiProperty({ description: 'ISO timestamp when the access token expires.' })
   @Expose()
   accessTokenExpiresAt!: Date;
 }
