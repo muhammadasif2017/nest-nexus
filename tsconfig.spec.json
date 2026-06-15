@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "node"],
+    "paths": {
+      "mongodb": ["./node_modules/mongoose/node_modules/mongodb"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}
