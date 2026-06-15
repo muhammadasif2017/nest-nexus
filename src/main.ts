@@ -6,7 +6,7 @@ import { AppModule } from './app.module';
 
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import csurf from 'csurf';
+import { doubleCsrf } from 'csrf-csrf';
 import compression from 'compression';
 import session from 'express-session';
 import MongoStore from 'connect-mongo';
@@ -83,20 +83,23 @@ async function bootstrap() {
   );
 
   // ── CSRF Protection ───────────────────────────────────────────────────────
-  // Protects all state-mutating routes. The client reads the token from the
-  // 'XSRF-TOKEN' cookie and sends it back as 'X-CSRF-Token' header.
-  // Note: CSRF is only meaningful for session/cookie-based auth; JWT Bearer
-  // routes are naturally CSRF-immune (browsers can't auto-send Bearer headers).
-  app.use(
-    csurf({
-      cookie: {
-        httpOnly: false, // Client JS MUST read this cookie to send the header back
-        sameSite: 'strict',
-        secure: NODE_ENV === 'production',
-        key: 'XSRF-TOKEN',
-      },
-    }),
-  );
+  // Double-submit cookie pattern: server sets XSRF-TOKEN cookie; client JS
+  // reads it and sends the value back as X-CSRF-Token header on mutating requests.
+  // JWT Bearer routes are naturally CSRF-immune (browsers can't auto-send
+  // Bearer headers), so CSRF protection matters primarily for session-based routes.
+  const { doubleCsrfProtection } = doubleCsrf({
+    getSecret: () => SESSION_SECRET!,
+    // Ties the token to the session ID so token fixation is not possible.
+    getSessionIdentifier: (req) => req.session?.id ?? req.ip ?? '',
+    cookieName: 'XSRF-TOKEN',
+    cookieOptions: {
+      httpOnly: false, // Client JS must read this to send as header
+      sameSite: 'strict',
+      secure: NODE_ENV === 'production',
+    },
+    getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
+  });
+  app.use(doubleCsrfProtection);
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...

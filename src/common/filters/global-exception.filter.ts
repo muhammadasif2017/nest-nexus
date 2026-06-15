@@ -74,7 +74,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
           // (like Apollo Client) use this for retry logic.
           http: { status: statusCode },
           // Only include a timestamp in dev for easier debugging
-          ...(process.env.NODE_ENV !== 'production' && {
+          ...(process.env.NODE_ENV === 'development' && {
             timestamp: new Date().toISOString(),
             // Expose the original message in dev so you can debug quickly
             originalMessage: message,
@@ -108,7 +108,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       path: request.url,
       timestamp: new Date().toISOString(),
       // In development, include the stack trace so you can debug without logs
-      ...(process.env.NODE_ENV !== 'production' && isInternal && {
+      ...(process.env.NODE_ENV === 'development' && isInternal && {
         stack: exception instanceof Error ? exception.stack : undefined,
       }),
     });
