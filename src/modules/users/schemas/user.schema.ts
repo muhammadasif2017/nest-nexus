@@ -91,7 +91,6 @@ export class User extends Document {
     unique: true,
     lowercase: true, // Normalize email before saving
     trim: true,
-    index: true, // Explicitly declare index — don't rely on autoIndex in prod
   })
   email!: string;
 

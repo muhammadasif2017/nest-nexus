@@ -6,6 +6,7 @@ import { join } from 'path';
 import { Request, Response } from 'express';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloServerPluginInlineTrace } from '@apollo/server/plugin/inlineTrace';
+import { GraphQLFormattedError } from 'graphql';
 
 @Module({
   imports: [
@@ -77,15 +78,10 @@ import { ApolloServerPluginInlineTrace } from '@apollo/server/plugin/inlineTrace
           // ── Error Formatting ──────────────────────────────────────────────
           // This runs AFTER our GlobalExceptionFilter. It's a final safety net
           // to ensure internal errors never leak stack traces in production.
-          formatError: (formattedError, error) => {
-            // The original error is the raw exception; formattedError is what
-            // Apollo has already processed. We augment it, not replace it.
-            if (isDev) {
-              // In dev, include the originalError for stack traces in the playground
-              return formattedError;
-            }
+          formatError: (formattedError: GraphQLFormattedError) => {
+            if (isDev) return formattedError;
 
-            // In production, strip extensions we don't want clients to see
+            // Strip stacktrace in production — never expose internals to clients
             const { stacktrace, ...safeExtensions } = formattedError.extensions ?? {};
             return { ...formattedError, extensions: safeExtensions };
           },

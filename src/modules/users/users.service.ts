@@ -48,6 +48,11 @@ export class UsersService {
   }
 
   async deactivate(id: string): Promise<UserOutput> {
-    return this.update(id, { isActive: false } as any);
+    const updated = await this.userModel
+      .findByIdAndUpdate(id, { $set: { isActive: false } }, { new: true, runValidators: true })
+      .lean()
+      .exec();
+    if (!updated) throw new NotFoundException(`User with id ${id} not found.`);
+    return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
   }
 }
