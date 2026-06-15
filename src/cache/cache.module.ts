@@ -9,14 +9,16 @@ import KeyvRedis from '@keyv/redis';
       isGlobal: true,
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        ttl: 5 * 60 * 1000, // 5 minutes default TTL
-        stores: [
-          new KeyvRedis(
-            `redis://${config.get<string>('redis.host')}:${config.get<number>('redis.port')}`,
-          ),
-        ],
-      }),
+      useFactory: (config: ConfigService) => {
+        const host = config.get<string>('redis.host');
+        const port = config.get<number>('redis.port');
+        const password = config.get<string | undefined>('redis.password');
+        const auth = password ? `:${encodeURIComponent(password)}@` : '';
+        return {
+          ttl: 5 * 60 * 1000,
+          stores: [new KeyvRedis(`redis://${auth}${host}:${port}`)],
+        };
+      },
     }),
   ],
   exports: [NestCacheModule],

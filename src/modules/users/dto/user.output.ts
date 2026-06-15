@@ -10,6 +10,7 @@ export class UserOutput {
   @Field(() => ID)
   @ApiProperty({ example: '64a1f2b3c4d5e6f7a8b9c0d1' })
   @Expose()
+  // Mongoose returns _id as ObjectId — transform to plain string for a consistent serializable ID.
   @Transform(({ obj }) => obj._id?.toString() ?? obj.id)
   id!: string;
 

@@ -17,6 +17,9 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './strategies/jwt.strategy';
 
+// JWT and session flows share the same base URL intentionally —
+// clients choose their auth mechanism by which endpoint they call,
+// not by a different URL prefix. This keeps the URL surface minimal.
 @ApiTags('auth')
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
@@ -136,7 +139,7 @@ export class AuthController {
   }
 
   @Post('session/logout')
-  @Public()
+  @Public() // Session guard handles auth for this endpoint — no JWT required
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Session-based logout', description: 'Destroys the server-side session.' })
   @ApiResponse({ status: 204, description: 'Session destroyed.' })

@@ -13,6 +13,8 @@ export class AuthOutput {
   @Field()
   @ApiProperty({ description: 'Short-lived JWT access token. Store in memory, not localStorage.' })
   @Expose()
+  // Store in memory (not localStorage) — localStorage is vulnerable to XSS; the
+  // HttpOnly refresh cookie silently reissues this token on page reload.
   accessToken!: string;
 
   @Field(() => UserOutput)

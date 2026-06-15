@@ -15,6 +15,7 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
 
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.coerce.number().default(6379),
+    REDIS_PASSWORD: z.string().optional(),
 
     JWT_SECRET: z.string().min(32),
     JWT_EXPIRES_IN: z.string().default('15m'),
