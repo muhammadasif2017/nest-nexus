@@ -1,7 +1,7 @@
 import {
   Controller, Post, Delete, Param, UploadedFile,
   UseInterceptors, UseGuards, ParseFilePipe,
-  MaxFileSizeValidator, HttpCode, HttpStatus,
+  MaxFileSizeValidator, HttpCode, HttpStatus, ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -75,9 +75,19 @@ export class UploadController {
 
   @Delete(':key(*)')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete an uploaded file', description: 'Key is the full S3 object key (e.g. avatars/userId/uuid.webp).' })
+  @ApiOperation({ summary: 'Delete an uploaded file', description: 'Key must be owned by the authenticated user (prefixed with avatars/{userId}/ or uploads/{userId}/).' })
   @ApiResponse({ status: 204, description: 'Deleted.' })
-  async deleteFile(@Param('key') key: string): Promise<void> {
+  @ApiResponse({ status: 403, description: 'Key does not belong to the authenticated user.' })
+  async deleteFile(
+    @Param('key') key: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<void> {
+    const owned =
+      key.startsWith(`avatars/${user.sub}/`) ||
+      key.startsWith(`uploads/${user.sub}/`);
+    if (!owned) {
+      throw new ForbiddenException('You do not have permission to delete this file.');
+    }
     await this.storage.delete(key);
   }
 }

@@ -172,6 +172,14 @@ async function bootstrap() {
     app.use('/api/queues', bullBoardAdapter.getRouter());
   }
 
+  // Drain the pg pool used by connect-pg-simple when the process shuts down.
+  // NestJS shutdown hooks handle SIGTERM/SIGINT for the app itself; the pool
+  // is a local variable here so it needs its own cleanup handler.
+  app.enableShutdownHooks();
+  ['SIGTERM', 'SIGINT'].forEach((sig) =>
+    process.once(sig, () => void pgPool.end()),
+  );
+
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
   console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
