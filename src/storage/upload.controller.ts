@@ -73,13 +73,13 @@ export class UploadController {
     return { url, key };
   }
 
-  @Delete(':key(*)')
+  @Delete('*')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete an uploaded file', description: 'Key must be owned by the authenticated user (prefixed with avatars/{userId}/ or uploads/{userId}/).' })
   @ApiResponse({ status: 204, description: 'Deleted.' })
   @ApiResponse({ status: 403, description: 'Key does not belong to the authenticated user.' })
   async deleteFile(
-    @Param('key') key: string,
+    @Param('0') key: string,
     @CurrentUser() user: JwtPayload,
   ): Promise<void> {
     const owned =
