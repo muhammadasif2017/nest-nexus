@@ -41,7 +41,9 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
         return;
       }
       // Cross-instance: another pod invalidated these keys, so we do the same locally.
-      void Promise.all(keys.map((k) => this.cache.del(k)));
+      Promise.all(keys.map((k) => this.cache.del(k))).catch((err) =>
+        console.warn('[CacheInvalidation] local key invalidation failed:', err),
+      );
     });
   }
 

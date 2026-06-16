@@ -69,6 +69,7 @@ export class TokenService {
 
     const familyTokens = await this.prisma.refreshToken.findMany({
       where: { userId: payload.sub, family: payload.family },
+      take: 50,
     });
 
     const incomingHash = this.hashRefreshToken(rawToken);
@@ -166,6 +167,7 @@ export class TokenService {
         deviceId: { not: null },
       },
       orderBy: { lastUsedAt: 'desc' },
+      take: 100,
     });
 
     const deviceMap = new Map<string, RefreshToken>();

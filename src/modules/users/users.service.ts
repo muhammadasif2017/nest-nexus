@@ -22,7 +22,14 @@ export class UsersService {
     const cached = await this.cache.get<UserOutput[]>('users:all');
     if (cached) return cached;
 
-    const users = await this.prisma.user.findMany({ where: { isActive: true } });
+    const users = await this.prisma.user.findMany({
+      where: { isActive: true },
+      select: {
+        id: true, email: true, displayName: true, roles: true,
+        isEmailVerified: true, isActive: true, avatarUrl: true,
+        lastLoginAt: true, createdAt: true, updatedAt: true,
+      },
+    });
     const result = plainToInstance(UserOutput, users, { excludeExtraneousValues: true });
     await this.cache.set('users:all', result);
     return result;

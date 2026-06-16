@@ -72,7 +72,14 @@ describe('UsersService', () => {
     it('queries only active users', async () => {
       const { service, prisma } = makeService();
       await service.findAll();
-      expect(prisma.user.findMany).toHaveBeenCalledWith({ where: { isActive: true } });
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { isActive: true },
+        select: {
+          id: true, email: true, displayName: true, roles: true,
+          isEmailVerified: true, isActive: true, avatarUrl: true,
+          lastLoginAt: true, createdAt: true, updatedAt: true,
+        },
+      });
     });
 
     it('returns empty array when no active users', async () => {

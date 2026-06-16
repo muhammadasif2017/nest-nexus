@@ -1,6 +1,5 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import Redis from 'ioredis';
+import { Injectable, Logger } from '@nestjs/common';
+import { RedisClientService } from '../redis/redis-client.service';
 import crypto from 'crypto';
 
 // Lua script for atomic compare-and-delete.
@@ -15,34 +14,22 @@ const RELEASE_SCRIPT = `
 `;
 
 @Injectable()
-export class RedisLockService implements OnModuleDestroy {
+export class RedisLockService {
   private readonly logger = new Logger(RedisLockService.name);
-  private readonly redis: Redis;
 
-  constructor(private readonly config: ConfigService) {
-    this.redis = new Redis({
-      host: config.get<string>('redis.host'),
-      port: config.get<number>('redis.port'),
-      password: config.get<string | undefined>('redis.password'),
-      lazyConnect: true,
-    });
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await this.redis.quit();
-  }
+  constructor(private readonly redisClient: RedisClientService) {}
 
   // Acquire a distributed lock. Returns the lock token if acquired, null if not.
   // ttlSeconds: how long the lock lives even if the holder crashes (prevents deadlock).
   async acquire(key: string, ttlSeconds = 30): Promise<string | null> {
     const token = crypto.randomUUID();
-    const result = await this.redis.set(`lock:${key}`, token, 'EX', ttlSeconds, 'NX');
+    const result = await this.redisClient.client.set(`lock:${key}`, token, 'EX', ttlSeconds, 'NX');
     return result === 'OK' ? token : null;
   }
 
   // Release a lock. Only releases if this instance still owns it (Lua atomic check).
   async release(key: string, token: string): Promise<void> {
-    await this.redis.eval(RELEASE_SCRIPT, 1, `lock:${key}`, token);
+    await this.redisClient.client.eval(RELEASE_SCRIPT, 1, `lock:${key}`, token);
   }
 
   // Execute a function under a distributed lock. Skips silently if lock not acquired

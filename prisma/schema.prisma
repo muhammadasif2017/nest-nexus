@@ -23,7 +23,7 @@ model User {
   twoFactorSecret          String?
   isTwoFactorEnabled       Boolean   @default(false)
   twoFactorBackupCodes     String[]  @default([])
-  magicLinkTokenHash       String?
+  magicLinkTokenHash       String?   @unique
   magicLinkExpiresAt       DateTime?
   hasPassword              Boolean   @default(true)
   avatarUrl                String?
@@ -32,6 +32,9 @@ model User {
 
   refreshTokens  RefreshToken[]
   oauthProviders OauthProvider[]
+
+  @@index([isActive])
+  @@index([magicLinkExpiresAt])
 }
 
 model RefreshToken {
@@ -53,6 +56,8 @@ model RefreshToken {
   @@index([tokenHash])
   @@index([family])
   @@index([userId])
+  @@index([expiresAt])
+  @@index([isRevoked])
 }
 
 model OauthProvider {

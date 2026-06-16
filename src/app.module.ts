@@ -18,6 +18,7 @@ import { configValidationSchema } from './config/config.validation'; // Zod sche
 
 // Infrastructure modules
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisModule } from './redis/redis.module';
 import { CacheModule } from './cache/cache.module';
 import { LoggerModule } from './logger/logger.module';
 import { QueuesModule } from './queues/queues.module';
@@ -63,6 +64,7 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
 
     // Infrastructure
     PrismaModule,
+    RedisModule,
     CacheModule,
     LoggerModule,
     QueuesModule,

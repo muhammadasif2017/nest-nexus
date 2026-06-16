@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 export interface JwtPayload {
@@ -17,6 +18,11 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
+  // Caches isActive status per user for 30s to avoid a DB round-trip on every request.
+  // Deactivated users are blocked within 30s — acceptable since JWT itself is 15 min.
+  private readonly activeCache = new Map<string, { ok: boolean; exp: number }>();
+  private static readonly CACHE_TTL = 30_000;
+
   constructor(
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
@@ -29,15 +35,32 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload): Promise<JwtPayload> {
+    const now = Date.now();
+    const cached = this.activeCache.get(payload.sub);
+    if (cached && cached.exp > now) {
+      if (!cached.ok) throw new UnauthorizedException('User account is inactive or not found.');
+      return payload;
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
       select: { isActive: true },
     });
 
-    if (!user || !user.isActive) {
-      throw new UnauthorizedException('User account is inactive or not found.');
-    }
+    const ok = !!(user?.isActive);
+    this.activeCache.set(payload.sub, { ok, exp: now + JwtStrategy.CACHE_TTL });
 
+    if (!ok) throw new UnauthorizedException('User account is inactive or not found.');
     return payload;
+  }
+
+  invalidateUserCache(userId: string): void {
+    this.activeCache.delete(userId);
+  }
+
+  @OnEvent('user.updated')
+  @OnEvent('user.deactivated')
+  onUserChanged(payload: { userId: string }): void {
+    this.activeCache.delete(payload.userId);
   }
 }

@@ -1,10 +1,23 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { OnEvent } from '@nestjs/event-emitter';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 
+interface CachedSessionUser {
+  id: string;
+  email: string;
+  roles: string[];
+  isActive: boolean;
+  exp: number;
+}
+
 @Injectable()
 export class SessionGuard implements CanActivate {
+  // 30s TTL — same rationale as JwtStrategy: session users deactivated within one cache window.
+  private static readonly CACHE_TTL = 30_000;
+  private readonly userCache = new Map<string, CachedSessionUser>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -13,6 +26,14 @@ export class SessionGuard implements CanActivate {
 
     if (!userId) {
       throw new UnauthorizedException('No active session.');
+    }
+
+    const now = Date.now();
+    const cached = this.userCache.get(userId);
+    if (cached && cached.exp > now) {
+      if (!cached.isActive) throw new UnauthorizedException('Session user not found or inactive.');
+      (request as any).user = cached;
+      return true;
     }
 
     const user = await this.prisma.user.findUnique({
@@ -24,9 +45,17 @@ export class SessionGuard implements CanActivate {
       throw new UnauthorizedException('Session user not found or inactive.');
     }
 
+    this.userCache.set(userId, { ...user, exp: now + SessionGuard.CACHE_TTL });
+
     // Populate req.user so @CurrentUser() works on session-protected routes
     (request as any).user = user;
     return true;
+  }
+
+  @OnEvent('user.updated')
+  @OnEvent('user.deactivated')
+  onUserChanged(payload: { userId: string }): void {
+    this.userCache.delete(payload.userId);
   }
 
   private getRequest(context: ExecutionContext): Request {

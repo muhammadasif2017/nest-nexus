@@ -1,6 +1,6 @@
 import {
   Injectable, UnauthorizedException, ConflictException,
-  ForbiddenException, NotFoundException,
+  ForbiddenException, NotFoundException, Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
@@ -15,8 +15,17 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User, Prisma } from '@prisma/client';
 import { OAuthProfile } from './strategies/google.strategy';
 
+type UserForAuth = Pick<User,
+  'id' | 'email' | 'displayName' | 'roles' |
+  'isEmailVerified' | 'isActive' | 'avatarUrl' |
+  'lastLoginAt' | 'createdAt' | 'updatedAt' |
+  'isTwoFactorEnabled'
+>;
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tokenService: TokenService,
@@ -69,7 +78,7 @@ export class AuthService {
 
     this.prisma.user
       .update({ where: { id: user.id }, data: { lastLoginAt: new Date(), lastLoginIp: ipAddress } })
-      .catch(() => {});
+      .catch((err) => this.logger.warn(err, 'lastLoginAt update failed'));
 
     // 2FA is enabled — issue a short-lived pending token instead of a full session
     if (user.isTwoFactorEnabled) return this.buildPendingTwoFactorResponse(user);
@@ -80,35 +89,65 @@ export class AuthService {
   // Issues a full token pair for a user whose identity has already been verified
   // (post-2FA check, magic link, or OAuth callback). Not a replacement for login().
   async issueTokens(userId: string): Promise<{ auth: AuthOutput; refreshToken: string }> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true, email: true, displayName: true, roles: true,
+        isEmailVerified: true, isActive: true, avatarUrl: true,
+        lastLoginAt: true, createdAt: true, updatedAt: true,
+        isTwoFactorEnabled: true,
+      },
+    });
     if (!user || !user.isActive) throw new NotFoundException('User not found or inactive.');
     return this.buildAuthResponse(user);
   }
 
   async oauthLogin(profile: OAuthProfile): Promise<{ auth: AuthOutput; refreshToken: string }> {
     // Try finding an existing OAuth link first
-    let user: User | null = null;
+    let user: UserForAuth | null = null;
 
     const existing = await this.prisma.oauthProvider.findUnique({
       where: { provider_providerId: { provider: profile.provider, providerId: profile.providerId } },
-      include: { user: true },
+      select: {
+        user: {
+          select: {
+            id: true, email: true, displayName: true, roles: true,
+            isEmailVerified: true, isActive: true, avatarUrl: true,
+            lastLoginAt: true, createdAt: true, updatedAt: true,
+            isTwoFactorEnabled: true,
+          },
+        },
+      },
     });
 
     if (existing) {
       user = existing.user;
     } else if (profile.email) {
-      // Link OAuth to existing account that has the same email
-      user = await this.prisma.user.findUnique({ where: { email: profile.email.toLowerCase() } });
-
-      if (user) {
-        await this.prisma.oauthProvider.create({
+      // Link OAuth to existing account that has the same email (or no-op if link already exists)
+      try {
+        user = await this.prisma.user.update({
+          where: { email: profile.email.toLowerCase() },
           data: {
-            userId: user.id,
-            provider: profile.provider,
-            providerId: profile.providerId,
-            providerEmail: profile.email,
+            oauthProviders: {
+              connectOrCreate: {
+                where: { provider_providerId: { provider: profile.provider, providerId: profile.providerId } },
+                create: { provider: profile.provider, providerId: profile.providerId, providerEmail: profile.email },
+              },
+            },
+          },
+          select: {
+            id: true, email: true, displayName: true, roles: true,
+            isEmailVerified: true, isActive: true, avatarUrl: true,
+            lastLoginAt: true, createdAt: true, updatedAt: true,
+            isTwoFactorEnabled: true,
           },
         });
+      } catch (e) {
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+          user = null; // No existing account with this email
+        } else {
+          throw e;
+        }
       }
     }
 
@@ -162,7 +201,7 @@ export class AuthService {
     return { auth: { accessToken, accessTokenExpiresAt: expiresAt } as any, refreshToken };
   }
 
-  private buildPendingTwoFactorResponse(user: User): { auth: AuthOutput; refreshToken: string } {
+  private buildPendingTwoFactorResponse(user: UserForAuth): { auth: AuthOutput; refreshToken: string } {
     const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     return {
@@ -172,7 +211,7 @@ export class AuthService {
   }
 
   private async buildAuthResponse(
-    user: User,
+    user: UserForAuth,
   ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const accessToken = this.tokenService.generateAccessToken(user);
     const refreshToken = await this.tokenService.generateRefreshToken(user.id);

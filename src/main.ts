@@ -73,7 +73,10 @@ async function bootstrap() {
   // ── Session (Hybrid Auth: session-based path) ──────────────────────────────
   // Sessions are stored in PostgreSQL to survive server restarts/scale-out.
   const PgSession = connectPgSimple(session);
-  const pgPool = new Pool({ connectionString: DATABASE_URL });
+  const pgPool = new Pool({
+    connectionString: DATABASE_URL,
+    max: config.get<number>('database.sessionPoolMax'),
+  });
 
   app.use(
     session({

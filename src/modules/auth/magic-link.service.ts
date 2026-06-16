@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QUEUE_EMAIL, EmailJobName } from '../../queues/queues.constants';
@@ -18,24 +19,24 @@ export class MagicLinkService {
   ) {}
 
   async send(email: string): Promise<void> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      select: { id: true, displayName: true },
-    });
-
-    // Always respond 200 — don't reveal whether the email exists
-    if (!user) return;
-
     const token = crypto.randomBytes(32).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        magicLinkTokenHash: tokenHash,
-        magicLinkExpiresAt: new Date(Date.now() + EXPIRY_MS),
-      },
-    });
+    let user: { id: string; displayName: string };
+    try {
+      user = await this.prisma.user.update({
+        where: { email: email.toLowerCase() },
+        data: {
+          magicLinkTokenHash: tokenHash,
+          magicLinkExpiresAt: new Date(Date.now() + EXPIRY_MS),
+        },
+        select: { id: true, displayName: true },
+      });
+    } catch (e) {
+      // Always respond 200 — don't reveal whether the email exists
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') return;
+      throw e;
+    }
 
     const clientOrigin = this.config.get<string>('app.clientOrigin');
     const magicLink = `${clientOrigin}/auth/magic-link?token=${token}`;

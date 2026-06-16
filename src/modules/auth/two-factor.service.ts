@@ -82,12 +82,10 @@ export class TwoFactorService {
 
     // Try backup codes — strip formatting before hashing
     const hash = this.hashCode(userId, code.replace(/-/g, '').toUpperCase());
-    const idx = user.twoFactorBackupCodes.indexOf(hash);
-    if (idx === -1) return false;
+    if (!user.twoFactorBackupCodes.includes(hash)) return false;
 
     // Single-use: remove the matched backup code
-    const updated = [...user.twoFactorBackupCodes];
-    updated.splice(idx, 1);
+    const updated = user.twoFactorBackupCodes.filter((c) => c !== hash);
     await this.prisma.user.update({ where: { id: userId }, data: { twoFactorBackupCodes: updated } });
     return true;
   }
