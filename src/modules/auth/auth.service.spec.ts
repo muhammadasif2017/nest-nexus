@@ -2,11 +2,13 @@ import 'reflect-metadata';
 import {
   ConflictException,
   ForbiddenException,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { RegisterInput } from './dto/register.input';
@@ -30,6 +32,8 @@ const makeUserDoc = (overrides: Record<string, unknown> = {}) => ({
   roles: ['user'],
   isEmailVerified: false,
   isActive: true,
+  isTwoFactorEnabled: false,
+  avatarUrl: null,
   password: '$2b$12$hashedpassword',
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
@@ -43,11 +47,15 @@ const makePrismaMock = () => ({
     create: jest.fn().mockResolvedValue(makeUserDoc()),
     update: jest.fn().mockResolvedValue(makeUserDoc()),
   },
+  oauthProvider: {
+    findUnique: jest.fn().mockResolvedValue(null),
+  },
 });
 
 const makeTokenServiceMock = () => ({
   generateAccessToken: jest.fn().mockReturnValue('mock-access-token'),
   generateRefreshToken: jest.fn().mockResolvedValue('mock-refresh-token'),
+  generatePendingTwoFactorToken: jest.fn().mockReturnValue('mock-pending-token'),
   revokeAllTokens: jest.fn().mockResolvedValue(undefined),
   rotateRefreshToken: jest.fn().mockResolvedValue({
     accessToken: 'rotated-access',
@@ -319,6 +327,161 @@ describe('AuthService', () => {
       const { service, config } = makeService();
       await service.refresh('old-refresh-token');
       expect(config.get).toHaveBeenCalledWith('jwt.expiresIn');
+    });
+  });
+
+  // ── oauthLogin ────────────────────────────────────────────────────────────────
+
+  describe('oauthLogin()', () => {
+    const profile = {
+      provider: 'google',
+      providerId: 'gid-123',
+      email: 'oauth@test.com',
+      displayName: 'OAuth User',
+    };
+
+    const makeP2025 = () =>
+      new Prisma.PrismaClientKnownRequestError('Record not found', {
+        code: 'P2025',
+        clientVersion: '7.0.0',
+      });
+
+    const makeP2002 = () =>
+      new Prisma.PrismaClientKnownRequestError('Unique constraint', {
+        code: 'P2002',
+        clientVersion: '7.0.0',
+      });
+
+    it('returns auth when existing OAuth provider link found', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue({ user: makeUserDoc() });
+      const result = await service.oauthLogin(profile);
+      expect(result.auth.accessToken).toBe('mock-access-token');
+      expect(result.refreshToken).toBe('mock-refresh-token');
+    });
+
+    it('skips user.update and user.create when existing provider found', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue({ user: makeUserDoc() });
+      await service.oauthLogin(profile);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('links OAuth to existing email-matched account when no provider link exists', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.update.mockResolvedValue(makeUserDoc());
+      const result = await service.oauthLogin(profile);
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { email: 'oauth@test.com' } }),
+      );
+      expect(result.auth.accessToken).toBe('mock-access-token');
+    });
+
+    it('creates new user when user.update throws P2025 (no matching email)', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.update.mockRejectedValue(makeP2025());
+      prisma.user.create.mockResolvedValue(makeUserDoc());
+      const result = await service.oauthLogin(profile);
+      expect(prisma.user.create).toHaveBeenCalled();
+      expect(result.auth.accessToken).toBe('mock-access-token');
+    });
+
+    it('creates new user with generated email when profile has no email', async () => {
+      const { service, prisma } = makeService();
+      const noEmailProfile = { provider: 'github', providerId: 'ghid-456', displayName: 'GH User' };
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockResolvedValue(makeUserDoc());
+      await service.oauthLogin(noEmailProfile);
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ email: 'ghid-456@github.oauth' }),
+        }),
+      );
+    });
+
+    it('emits user.created event when new user is created', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.update.mockRejectedValue(makeP2025());
+      prisma.user.create.mockResolvedValue(makeUserDoc());
+      await service.oauthLogin(profile);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('user.created', { userId: 'user-id-1' });
+    });
+
+    it('does not emit user.created when existing provider link found', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue({ user: makeUserDoc() });
+      await service.oauthLogin(profile);
+      expect(eventEmitter.emit).not.toHaveBeenCalledWith('user.created', expect.anything());
+    });
+
+    it('throws ForbiddenException when user is deactivated', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue({ user: makeUserDoc({ isActive: false }) });
+      await expect(service.oauthLogin(profile)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('returns pending 2FA token when user has 2FA enabled', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue({
+        user: makeUserDoc({ isTwoFactorEnabled: true }),
+      });
+      const result = await service.oauthLogin(profile);
+      expect((result.auth as any).isTwoFactorPending).toBe(true);
+      expect(result.auth.accessToken).toBe('mock-pending-token');
+      expect(result.refreshToken).toBe('');
+    });
+
+    it('throws ConflictException when user.create throws P2002', async () => {
+      const { service, prisma } = makeService();
+      const noEmailProfile = { provider: 'github', providerId: 'ghid-456', displayName: 'GH User' };
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.create.mockRejectedValue(makeP2002());
+      await expect(service.oauthLogin(noEmailProfile)).rejects.toThrow(ConflictException);
+    });
+
+    it('re-throws non-P2025 errors from user.update', async () => {
+      const { service, prisma } = makeService();
+      prisma.oauthProvider.findUnique.mockResolvedValue(null);
+      prisma.user.update.mockRejectedValue(new Error('DB error'));
+      await expect(service.oauthLogin(profile)).rejects.toThrow('DB error');
+    });
+  });
+
+  // ── issueTokens ───────────────────────────────────────────────────────────────
+
+  describe('issueTokens()', () => {
+    it('returns full auth for active user', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      const result = await service.issueTokens('user-id-1');
+      expect(result.auth.accessToken).toBe('mock-access-token');
+      expect(result.refreshToken).toBe('mock-refresh-token');
+      expect(result.auth.user).toBeDefined();
+    });
+
+    it('queries by userId with required select fields', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      await service.issueTokens('user-id-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'user-id-1' } }),
+      );
+    });
+
+    it('throws NotFoundException when user not found', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.issueTokens('ghost-id')).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws NotFoundException when user is inactive', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc({ isActive: false }));
+      await expect(service.issueTokens('user-id-1')).rejects.toThrow(NotFoundException);
     });
   });
 
