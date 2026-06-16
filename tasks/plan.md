@@ -11,7 +11,7 @@ Generated from coverage audit. Priority: security-critical first, then descendin
 - [x] **T5** — Extend `users.service.spec.ts`: cache hit/miss and event emission assertions
 - [x] **T6** — Unit tests for `EmailProcessor` (job routing, dead-letter on final attempt)
 - [x] **T7** — Unit tests for `AuthController` REST endpoints (2FA verify scope, session flows, OAuth callback, magic-link routes)
-- [ ] **T8** — Unit tests for `NotificationService` (SSE subscribe/cleanup, sendToUser, broadcast, event handlers)
+- [x] **T8** — Unit tests for `NotificationService` (SSE subscribe/cleanup, sendToUser, broadcast, event handlers)
 - [ ] **T9** — Unit tests for `TokenService.generatePendingTwoFactorToken()`
 
 ## Acceptance criteria per task
