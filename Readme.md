@@ -190,7 +190,8 @@ The JWT path (stateless Bearer tokens + HttpOnly refresh cookie) serves API clie
 apps, SPAs, third-party integrations — that manage their own session state. The session path
 (server-side sessions in PostgreSQL via `connect-pg-simple`) serves traditional web clients
 where the server holds state. Both paths share the same `AuthService` and converge on the same
-`req.user` object that guards and decorators read from.
+`req.user` object that guards and decorators read from. See ADR-010 for the full rationale
+and OAuth state-management details.
 
 ### Refresh token rotation with reuse detection
 
@@ -231,7 +232,8 @@ When `UsersService.update()` runs, it emits `user.updated` via EventEmitter2.
 `CacheInvalidationService` listens for that event, deletes the affected cache keys locally,
 and publishes an invalidation message to a Redis Pub/Sub channel. Every other running
 instance receives that message and deletes the same keys from their view of the cache.
-The stale window is near-zero rather than "up to TTL."
+The stale window is near-zero rather than "up to TTL." See ADR-011 for the design
+rationale and alternatives considered.
 
 ### Cron jobs use distributed locking
 
@@ -257,7 +259,8 @@ Layer 1 is automatic retry with exponential backoff — handles transient failur
 blips, momentary Redis timeouts). Layer 2 is the dead-letter store — on final failure,
 the job is persisted, classified by error type (transient, permanent, external),
 and an alert is fired for critical queues. Operators can inspect, acknowledge, and replay
-dead-letter jobs without touching the database directly.
+dead-letter jobs without touching the database directly. See ADR-009 for why BullMQ was
+chosen over pg-boss, Agenda, and Bull.
 
 ---
 
@@ -292,7 +295,7 @@ POST /api/v1/auth/refresh (refresh_token cookie sent automatically)
 GET /api/v1/auth/google          → redirects to Google consent screen
 GET /api/v1/auth/google/callback → Passport verifies, OAuthService upserts OauthProvider row
                                  → issues token pair → redirects to frontend
-                                   with access token in URL fragment (#token=...)
+                                   with access token as query param (?token=...)
 ```
 
 ### Account Linking
@@ -531,8 +534,8 @@ Follow the existing module pattern:
 
 ### Adding a new queue
 
-1. Add the queue name constant to `QUEUE_NAMES` in `queues.module.ts`
-2. Register it with `BullModule.registerQueue({ name: QUEUE_NAMES.YOUR_QUEUE })`
+1. Add the queue name constant to `src/queues/queues.constants.ts`
+2. Register it with `BullModule.registerQueue({ name: QUEUE_YOUR_QUEUE })` in `QueuesModule`
 3. Create a producer service in `queues/producers/`
 4. Create a processor extending `WorkerHost` in `queues/processors/`
 5. Add the `@OnWorkerEvent('failed')` hook pointing to `DeadLetterService`
