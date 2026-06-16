@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
-import { UseGuards, UseInterceptors } from '@nestjs/common';
+import { UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
 import { UserOutput } from './dto/user.output';
 import { UpdateUserInput } from './dto/update-user.input';
 import { UsersService } from './users.service';
@@ -39,7 +39,12 @@ export class UsersResolver {
   @Query(() => UserOutput, { name: 'user', nullable: true })
   @Public() // Override the class-level JwtAuthGuard for this specific query
   async findOne(@Args('id', { type: () => ID }) id: string): Promise<UserOutput | null> {
-    return this.usersService.findById(id);
+    try {
+      return await this.usersService.findById(id);
+    } catch (e) {
+      if (e instanceof NotFoundException) return null;
+      throw e;
+    }
   }
 
   // ── Authenticated: Update own profile ─────────────────────────────────────

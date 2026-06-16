@@ -21,8 +21,6 @@ import { Pool } from 'pg';
 
 import { Logger } from 'nestjs-pino';
 
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     // Hand off ALL request logging to Pino — disables NestJS's built-in logger
@@ -95,8 +93,8 @@ async function bootstrap() {
   // ── CSRF Protection ───────────────────────────────────────────────────────
   // Double-submit cookie pattern: server sets XSRF-TOKEN cookie; client JS
   // reads it and sends the value back as X-CSRF-Token header on mutating requests.
-  // JWT Bearer routes are naturally CSRF-immune (browsers can't auto-send
-  // Bearer headers), so CSRF protection matters primarily for session-based routes.
+  // JWT Bearer routes and GraphQL are CSRF-immune (browsers can't auto-send
+  // Bearer headers), so we scope CSRF to session-based routes only.
   const { doubleCsrfProtection } = doubleCsrf({
     getSecret: () => SESSION_SECRET!,
     // Ties the token to the session ID so token fixation is not possible.
@@ -109,7 +107,8 @@ async function bootstrap() {
     },
     getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
   });
-  app.use(doubleCsrfProtection);
+  // Apply only to session auth routes — not to JWT Bearer or GraphQL endpoints
+  app.use('/api/v1/auth/session', doubleCsrfProtection);
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
@@ -119,12 +118,6 @@ async function bootstrap() {
     exclude: [{ path: 'metrics', method: RequestMethod.GET }],
   });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
-
-  // ── Global Guards (applied to every route) ───────────────────────────────
-  // NOTE: We do NOT register JwtAuthGuard globally here.
-  // Instead, routes are "open by default" and we protect them with @UseGuards()
-  // or a metadata-driven approach using a custom @Public() decorator.
-  // This is safer than accidentally forgetting to mark a route as public.
 
   // ── Global Pipes ──────────────────────────────────────────────────────────
   // ValidationPipe transforms incoming plain objects into DTO class instances
@@ -137,9 +130,6 @@ async function bootstrap() {
       transformOptions: { enableImplicitConversion: true },
     }),
   );
-
-  // ── Global Filters ────────────────────────────────────────────────────────
-  app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ── Global Interceptors ───────────────────────────────────────────────────
   // ClassSerializerInterceptor respects @Exclude() and @Expose() on DTOs.

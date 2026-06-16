@@ -7,6 +7,7 @@ import { Request, Response } from 'express';
 import { ApolloServerPluginLandingPageLocalDefault } from '@apollo/server/plugin/landingPage/default';
 import { ApolloServerPluginInlineTrace } from '@apollo/server/plugin/inlineTrace';
 import { GraphQLFormattedError } from 'graphql';
+import jwt from 'jsonwebtoken';
 
 @Module({
   imports: [
@@ -63,14 +64,25 @@ import { GraphQLFormattedError } from 'graphql';
           subscriptions: {
             'graphql-ws': {
               onConnect: (context: any) => {
-                // Authentication for WebSocket connections happens here.
-                // HTTP Guards don't run for WS connections — you must handle
-                // auth manually in onConnect.
+                // HTTP Guards don't run for WS — auth is enforced here.
                 const { connectionParams } = context;
-                if (connectionParams?.authorization) {
-                  // Validate the token and attach user to context
-                  // (call your JwtStrategy.validate() logic here)
+                const authHeader = connectionParams?.authorization as string | undefined;
+                if (!authHeader?.startsWith('Bearer ')) {
+                  throw new Error('Unauthorized');
                 }
+                const token = authHeader.slice(7);
+                const secret = config.get<string>('jwt.secret')!;
+                let payload: any;
+                try {
+                  payload = jwt.verify(token, secret);
+                } catch {
+                  throw new Error('Unauthorized');
+                }
+                // Pending-2FA tokens must not access subscriptions
+                if (payload.scope === 'two_factor_pending') {
+                  throw new Error('Unauthorized');
+                }
+                return { user: payload };
               },
             },
           },

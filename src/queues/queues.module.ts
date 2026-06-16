@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { QUEUE_EMAIL } from './queues.constants';
+import { QUEUE_EMAIL, DEFAULT_JOB_ATTEMPTS } from './queues.constants';
 import { DeadLetterService } from './dead-letter.service';
 import { EmailProcessor } from './processors/email.processor';
 
@@ -17,7 +17,7 @@ import { EmailProcessor } from './processors/email.processor';
           password: config.get<string | undefined>('redis.password'),
         },
         defaultJobOptions: {
-          attempts: 3,
+          attempts: DEFAULT_JOB_ATTEMPTS,
           backoff: { type: 'exponential', delay: 2000 },
           removeOnComplete: { count: 100 },
           removeOnFail: { count: 500 },

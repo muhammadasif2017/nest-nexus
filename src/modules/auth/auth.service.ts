@@ -150,6 +150,15 @@ export class AuthService {
       throw new ForbiddenException('Your account has been deactivated. Please contact support.');
     }
 
+    if (user.isTwoFactorEnabled) {
+      const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+      return {
+        auth: { accessToken: pendingToken, isTwoFactorPending: true, accessTokenExpiresAt: expiresAt } as any,
+        refreshToken: '',
+      };
+    }
+
     return this.buildAuthResponse(user);
   }
 

@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import {
   QUEUE_EMAIL,
   EmailJobName,
+  DEFAULT_JOB_ATTEMPTS,
 } from '../queues.constants';
 import {
   EmailJobData,
@@ -44,12 +45,13 @@ export class EmailProcessor extends WorkerHost {
     }
   }
 
-  // Called by BullMQ after all retry attempts have been exhausted.
-  // Must always delegate to DeadLetterService — never silently swallow final failures.
+  // Called by BullMQ on every failed attempt (not only the final one).
+  // job.opts.attempts is undefined when the job inherits defaultJobOptions,
+  // so fall back to DEFAULT_JOB_ATTEMPTS which matches queues.module.ts.
   @OnWorkerEvent('failed')
   onFailed(job: Job<EmailJobData> | undefined, error: Error): void {
     if (!job) return;
-    const maxAttempts = job.opts.attempts ?? 1;
+    const maxAttempts = job.opts.attempts ?? DEFAULT_JOB_ATTEMPTS;
     if (job.attemptsMade >= maxAttempts) {
       void this.deadLetter.handleFailedJob(job, error);
     }

@@ -44,7 +44,7 @@ export class TwoFactorService {
     }
 
     const backupCodes = this.generateBackupCodes();
-    const backupCodeHashes = backupCodes.map((c) => this.hashCode(c));
+    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, c));
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -57,13 +57,13 @@ export class TwoFactorService {
   async disable(userId: string, totpCode: string): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { twoFactorSecret: true, isTwoFactorEnabled: true },
+      select: { isTwoFactorEnabled: true },
     });
     if (!user?.isTwoFactorEnabled) throw new BadRequestException('2FA is not enabled.');
 
-    if (!authenticator.verify({ token: totpCode, secret: user.twoFactorSecret! })) {
-      throw new UnauthorizedException('Invalid TOTP code.');
-    }
+    // Delegate to verify() so backup codes are also accepted (e.g., lost authenticator device)
+    const isValid = await this.verify(userId, totpCode);
+    if (!isValid) throw new UnauthorizedException('Invalid TOTP or backup code.');
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -81,7 +81,7 @@ export class TwoFactorService {
     if (authenticator.verify({ token: code, secret: user.twoFactorSecret })) return true;
 
     // Try backup codes — strip formatting before hashing
-    const hash = this.hashCode(code.replace(/-/g, '').toUpperCase());
+    const hash = this.hashCode(userId, code.replace(/-/g, '').toUpperCase());
     const idx = user.twoFactorBackupCodes.indexOf(hash);
     if (idx === -1) return false;
 
@@ -99,7 +99,7 @@ export class TwoFactorService {
     });
   }
 
-  private hashCode(code: string): string {
-    return crypto.createHash('sha256').update(code).digest('hex');
+  private hashCode(userId: string, code: string): string {
+    return crypto.createHash('sha256').update(userId + ':' + code).digest('hex');
   }
 }

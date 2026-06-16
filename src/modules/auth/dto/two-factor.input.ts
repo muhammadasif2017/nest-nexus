@@ -1,4 +1,4 @@
-import { IsString, Length } from 'class-validator';
+import { IsString, Length, IsEmail } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TwoFactorCodeInput {
@@ -10,7 +10,7 @@ export class TwoFactorCodeInput {
 
 export class MagicLinkSendInput {
   @ApiProperty({ description: 'Email address to send the magic link to' })
-  @IsString()
+  @IsEmail()
   email!: string;
 }
 

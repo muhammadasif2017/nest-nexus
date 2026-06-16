@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { LoggerModule as PinoLoggerModule } from 'nestjs-pino';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { IncomingMessage, ServerResponse } from 'http';
+import crypto from 'node:crypto';
 
 @Module({
   imports: [

@@ -1,4 +1,6 @@
-export const QUEUE_EMAIL = 'email';
+export const QUEUE_EMAIL = 'email' as const;
+
+export const DEFAULT_JOB_ATTEMPTS = 3;
 
 export const EmailJobName = {
   WELCOME: 'welcome',

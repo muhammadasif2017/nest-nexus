@@ -1,9 +1,8 @@
-import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '@prisma/client';
 import crypto from 'crypto';
-import bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { DeviceSessionOutput } from './dto/device-session.output';
@@ -72,10 +71,10 @@ export class TokenService {
       where: { userId: payload.sub, family: payload.family },
     });
 
+    const incomingHash = this.hashRefreshToken(rawToken);
     let matchedToken: RefreshToken | null = null;
     for (const candidate of familyTokens) {
-      const matches = await bcrypt.compare(rawToken, candidate.tokenHash);
-      if (matches) { matchedToken = candidate; break; }
+      if (candidate.tokenHash === incomingHash) { matchedToken = candidate; break; }
     }
 
     if (!matchedToken) {
@@ -86,7 +85,10 @@ export class TokenService {
     }
 
     if (matchedToken.isRevoked) {
-      throw new UnauthorizedException('Refresh token has been revoked.');
+      // Revoked token presented — token was already rotated, indicating possible theft.
+      // Revoke the entire family to invalidate all derived tokens.
+      await this.revokeTokenFamily(payload.sub, payload.family);
+      throw new UnauthorizedException('Refresh token has been revoked. All sessions have been terminated for security.');
     }
 
     await this.prisma.refreshToken.update({
@@ -126,8 +128,22 @@ export class TokenService {
       secure: isProd,
       sameSite: 'strict' as const,
       path: '/api/v1/auth',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: this.parseRefreshExpiry().getTime() - Date.now(),
     };
+  }
+
+  private hashRefreshToken(rawToken: string): string {
+    return crypto.createHash('sha256').update(rawToken).digest('hex');
+  }
+
+  private parseRefreshExpiry(): Date {
+    const expiresIn = this.config.get<string>('jwt.refreshExpiresIn') ?? '7d';
+    const match = expiresIn.match(/^(\d+)([smhd])$/);
+    if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const multipliers: Record<string, number> = {
+      s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000,
+    };
+    return new Date(Date.now() + parseInt(match[1]) * multipliers[match[2]]);
   }
 
   parseDeviceName(userAgent?: string): string {
@@ -196,14 +212,15 @@ export class TokenService {
       expiresIn: this.config.get<string>('jwt.refreshExpiresIn') as any,
     });
 
-    const tokenHash = await bcrypt.hash(rawToken, 8);
+    const tokenHash = this.hashRefreshToken(rawToken);
     const now = new Date();
+    const expiresAt = this.parseRefreshExpiry();
 
     await this.prisma.refreshToken.create({
       data: {
         userId,
         tokenHash,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        expiresAt,
         jti,
         family,
         deviceId,

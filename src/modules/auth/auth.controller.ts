@@ -11,6 +11,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
+import { TokenService } from './token.service';
 import { TwoFactorService } from './two-factor.service';
 import { MagicLinkService } from './magic-link.service';
 import { LoginInput } from './dto/login.input';
@@ -33,6 +34,7 @@ import { OAuthProfile } from './strategies/google.strategy';
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
+    private readonly tokenService: TokenService,
     private readonly twoFactorService: TwoFactorService,
     private readonly magicLinkService: MagicLinkService,
     private readonly config: ConfigService,
@@ -55,7 +57,7 @@ export class AuthController {
     // passthrough: true on @Res() means NestJS still handles the response
     // serialization — we're just adding the cookie as a side effect.
     const { auth, refreshToken } = await this.authService.register(dto);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth; // NestJS serializes this via the global ClassSerializerInterceptor
   }
 
@@ -74,7 +76,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const { auth, refreshToken } = await this.authService.login(dto, req.ip);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
 
@@ -98,7 +100,7 @@ export class AuthController {
       });
     }
     const { auth, refreshToken } = await this.authService.refresh(rawToken);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
 
@@ -129,8 +131,17 @@ export class AuthController {
   async sessionLogin(
     @Body() dto: LoginInput,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
     const { auth } = await this.authService.login(dto, req.ip);
+
+    if ((auth as any).isTwoFactorPending) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        statusCode: 401,
+        errorCode: 'TWO_FACTOR_REQUIRED',
+        message: 'Two-factor authentication required. Use the JWT flow to complete 2FA.',
+      });
+    }
 
     // Regenerate the session ID after login — this prevents session fixation attacks,
     // where an attacker pre-sets a known session ID and waits for the victim to log in.
@@ -144,7 +155,7 @@ export class AuthController {
     // Store the user payload in the session. The session is persisted to PostgreSQL
     // via connect-pg-simple (configured in main.ts).
     (req.session as any).user = auth.user;
-    (req.session as any).userId = auth.user.id;
+    (req.session as any).userId = auth.user!.id;
 
     // We don't return tokens here — the session cookie is the auth mechanism.
     return { message: 'Logged in successfully.', user: auth.user };
@@ -189,9 +200,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Google OAuth2 callback' })
   async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     const clientOrigin = this.config.get<string>('app.clientOrigin');
-    res.redirect(`${clientOrigin}/oauth/success?token=${auth.accessToken}`);
+        // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
+    res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);
   }
 
   // ── OAuth2 — GitHub ──────────────────────────────────────────────────────────
@@ -208,9 +220,10 @@ export class AuthController {
   @ApiOperation({ summary: 'GitHub OAuth2 callback' })
   async githubCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     const clientOrigin = this.config.get<string>('app.clientOrigin');
-    res.redirect(`${clientOrigin}/oauth/success?token=${auth.accessToken}`);
+        // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
+    res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);
   }
 
   // ── 2FA TOTP ─────────────────────────────────────────────────────────────────
@@ -263,7 +276,7 @@ export class AuthController {
     if (!isValid) throw new UnauthorizedException('Invalid 2FA code.');
 
     const { auth, refreshToken } = await this.authService.issueTokens(user.sub);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
 
@@ -293,7 +306,7 @@ export class AuthController {
   ): Promise<AuthOutput> {
     const userId = await this.magicLinkService.verify(dto.token);
     const { auth, refreshToken } = await this.authService.issueTokens(userId);
-    res.cookie('refresh_token', refreshToken, this.authService['tokenService'].getRefreshTokenCookieOptions());
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
 }

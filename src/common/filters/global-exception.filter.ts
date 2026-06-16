@@ -1,12 +1,12 @@
 import {
   ExceptionFilter, Catch, ArgumentsHost, HttpException,
-  HttpStatus, Logger,
+  HttpStatus, Logger, Injectable,
 } from '@nestjs/common';
-import { GqlExceptionFilter, GqlArgumentsHost } from '@nestjs/graphql';
+import { ConfigService } from '@nestjs/config';
+import { GqlExceptionFilter } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql';
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
-import { ThrottlerException } from '@nestjs/throttler';
 
 // ── Custom Error Codes ──────────────────────────────────────────────────────
 // These become the `extensions.code` field in GraphQL errors.
@@ -25,9 +25,15 @@ export enum ErrorCode {
 // @Catch() with no arguments catches EVERYTHING — handled and unhandled.
 // This is intentional: we want no exception to ever escape and expose a raw
 // Node.js stack trace to the client.
+@Injectable()
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
+  private readonly isDev: boolean;
+
+  constructor(private readonly config: ConfigService) {
+    this.isDev = this.config.get<string>('app.nodeEnv') !== 'production';
+  }
 
   catch(exception: unknown, host: ArgumentsHost): any {
     // ── Determine execution context ─────────────────────────────────────────
@@ -73,7 +79,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
           // (like Apollo Client) use this for retry logic.
           http: { status: statusCode },
           // Only include a timestamp in dev for easier debugging
-          ...(process.env.NODE_ENV === 'development' && {
+          ...(this.isDev && {
             timestamp: new Date().toISOString(),
             // Expose the original message in dev so you can debug quickly
             originalMessage: message,
@@ -107,7 +113,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       path: request.url,
       timestamp: new Date().toISOString(),
       // In development, include the stack trace so you can debug without logs
-      ...(process.env.NODE_ENV === 'development' && isInternal && {
+      ...(this.isDev && isInternal && {
         stack: exception instanceof Error ? exception.stack : undefined,
       }),
     });
@@ -141,15 +147,6 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
         : message;
 
       return { message: normalizedMessage, code, statusCode: status };
-    }
-
-    // ── Throttler (Rate Limit) Exception ─────────────────────────────────────
-    if (exception instanceof ThrottlerException) {
-      return {
-        message: 'Too many requests. Please slow down.',
-        code: ErrorCode.RATE_LIMITED,
-        statusCode: HttpStatus.TOO_MANY_REQUESTS,
-      };
     }
 
     // ── Prisma Known Request Errors ────────────────────────────────────────
@@ -191,11 +188,12 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
 
   private statusToErrorCode(status: number): ErrorCode {
     const map: Record<number, ErrorCode> = {
+      [HttpStatus.BAD_REQUEST]: ErrorCode.VALIDATION_ERROR,
       [HttpStatus.UNAUTHORIZED]: ErrorCode.UNAUTHENTICATED,
       [HttpStatus.FORBIDDEN]: ErrorCode.FORBIDDEN,
       [HttpStatus.NOT_FOUND]: ErrorCode.NOT_FOUND,
-      [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorCode.VALIDATION_ERROR,
       [HttpStatus.CONFLICT]: ErrorCode.CONFLICT,
+      [HttpStatus.UNPROCESSABLE_ENTITY]: ErrorCode.VALIDATION_ERROR,
       [HttpStatus.TOO_MANY_REQUESTS]: ErrorCode.RATE_LIMITED,
     };
     return map[status] ?? ErrorCode.INTERNAL_ERROR;

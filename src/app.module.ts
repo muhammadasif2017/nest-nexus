@@ -2,8 +2,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 // Config factories (typed, validated)
 import appConfig from './config/app.config';
@@ -29,6 +31,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { NotificationsModule } from './modules/notifications/notification.module';
 import { StorageModule } from './storage/storage.module';
+import { GraphQLConfigModule } from './graphql/graphql.module';
 
 @Module({
   imports: [
@@ -73,16 +76,31 @@ import { StorageModule } from './storage/storage.module';
     UsersModule,
     NotificationsModule,
     StorageModule,
+
+    // GraphQL (Apollo + subscriptions + schema generation)
+    GraphQLConfigModule,
   ],
 
   providers: [
+    // ThrottlerGuard first — reject rate-limited requests before auth runs
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
     },
+    // JwtAuthGuard global — all routes require auth by default.
+    // Use @Public() to opt individual routes out.
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
     {
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
+    },
+    // Register filter via DI so ConfigService can be injected into it
+    {
+      provide: APP_FILTER,
+      useClass: GlobalExceptionFilter,
     },
   ],
 })
