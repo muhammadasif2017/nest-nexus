@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '@prisma/client';
@@ -16,6 +16,8 @@ export interface RefreshTokenPayload {
 
 @Injectable()
 export class TokenService {
+  private readonly logger = new Logger(TokenService.name);
+
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
@@ -212,7 +214,9 @@ export class TokenService {
       },
     });
 
-    this.pruneExpiredTokens(userId).catch(() => {});
+    this.pruneExpiredTokens(userId).catch((err) =>
+      this.logger.warn({ err }, 'pruneExpiredTokens failed'),
+    );
     return rawToken;
   }
 }

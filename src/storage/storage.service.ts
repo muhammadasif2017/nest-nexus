@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -11,7 +11,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 @Injectable()
-export class StorageService implements OnModuleInit {
+export class StorageService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(StorageService.name);
   private readonly client: S3Client;
   private readonly bucket: string;
@@ -48,27 +48,41 @@ export class StorageService implements OnModuleInit {
     }
   }
 
+  onModuleDestroy(): void {
+    this.client.destroy();
+  }
+
   async upload(
     key: string,
     buffer: Buffer,
     mimeType: string,
     options?: { cacheControl?: string; metadata?: Record<string, string> },
   ): Promise<string> {
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: mimeType,
-        CacheControl: options?.cacheControl ?? 'public, max-age=31536000, immutable',
-        Metadata: options?.metadata,
-      }),
-    );
+    try {
+      await this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: mimeType,
+          CacheControl: options?.cacheControl ?? 'public, max-age=31536000, immutable',
+          Metadata: options?.metadata,
+        }),
+      );
+    } catch (err) {
+      this.logger.error({ err, key }, 'S3 upload failed');
+      throw new InternalServerErrorException('File upload failed. Please try again.');
+    }
     return this.getPublicUrl(key);
   }
 
   async delete(key: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    try {
+      await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      this.logger.error({ err, key }, 'S3 delete failed');
+      throw new InternalServerErrorException('File deletion failed. Please try again.');
+    }
   }
 
   async getPresignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {

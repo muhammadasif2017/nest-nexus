@@ -57,10 +57,17 @@ export class ClamAvService implements OnModuleInit {
       throw new BadRequestException('Virus scanner is unavailable. Please try again later.');
     }
 
-    const { isInfected, viruses } = await this.scanner.scanBuffer(buffer);
+    let isInfected: boolean;
+    let viruses: string[];
+    try {
+      ({ isInfected, viruses } = await this.scanner.scanBuffer(buffer));
+    } catch (err) {
+      this.logger.error({ err }, 'ClamAV scanBuffer failed');
+      throw new BadRequestException('Virus scanner error. Please try again.');
+    }
 
     if (isInfected) {
-      const virusName = (viruses as string[])[0] ?? 'Unknown';
+      const virusName = viruses[0] ?? 'Unknown';
       this.logger.warn(`Virus detected: ${virusName}`);
       return { isClean: false, virusName };
     }
