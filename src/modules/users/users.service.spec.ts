@@ -122,6 +122,29 @@ describe('UsersService', () => {
       expect(result[0].email).toBe('a@test.com');
       expect(result[1].email).toBe('b@test.com');
     });
+
+    it('returns cached value without hitting DB on cache hit', async () => {
+      const { service, prisma, cache } = makeService();
+      const cachedUsers = [makeRawUser()];
+      cache.get.mockResolvedValue(cachedUsers);
+      const result = await service.findAll();
+      expect(result).toBe(cachedUsers);
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+    });
+
+    it('populates cache after DB query on cache miss', async () => {
+      const { service, prisma, cache } = makeService();
+      cache.get.mockResolvedValue(undefined);
+      prisma.user.findMany.mockResolvedValue([makeRawUser()]);
+      await service.findAll();
+      expect(cache.set).toHaveBeenCalledWith('users:all', expect.any(Array));
+    });
+
+    it('reads cache with key "users:all"', async () => {
+      const { service, cache } = makeService();
+      await service.findAll();
+      expect(cache.get).toHaveBeenCalledWith('users:all');
+    });
   });
 
   // ── findById ─────────────────────────────────────────────────────────────────
@@ -159,6 +182,30 @@ describe('UsersService', () => {
       loader.batchUsers.load.mockResolvedValue(makeRawUser());
       const result = await service.findById('user-id-1');
       expect((result as any).password).toBeUndefined();
+    });
+
+    it('returns cached value without hitting DataLoader on cache hit', async () => {
+      const { service, loader, cache } = makeService();
+      const cachedUser = makeRawUser();
+      cache.get.mockResolvedValue(cachedUser);
+      const result = await service.findById('user-id-1');
+      expect(result).toBe(cachedUser);
+      expect(loader.batchUsers.load).not.toHaveBeenCalled();
+    });
+
+    it('populates cache after DataLoader call on cache miss', async () => {
+      const { service, loader, cache } = makeService();
+      cache.get.mockResolvedValue(undefined);
+      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      await service.findById('user-id-1');
+      expect(cache.set).toHaveBeenCalledWith('users:id:user-id-1', expect.any(Object));
+    });
+
+    it('reads cache with key "users:id:<id>"', async () => {
+      const { service, loader, cache } = makeService();
+      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      await service.findById('user-id-1');
+      expect(cache.get).toHaveBeenCalledWith('users:id:user-id-1');
     });
   });
 
@@ -244,6 +291,20 @@ describe('UsersService', () => {
       const result = await service.update('user-id-1', dto);
       expect((result as any).password).toBeUndefined();
     });
+
+    it('emits user.updated event with userId after successful update', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.user.update.mockResolvedValue(makeRawUser());
+      await service.update('user-id-1', dto);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('user.updated', { userId: 'user-id-1' });
+    });
+
+    it('does not emit user.updated event when update fails', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.user.update.mockRejectedValue(makeP2025());
+      await expect(service.update('missing-id', dto)).rejects.toThrow();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
   });
 
   // ── deactivate ────────────────────────────────────────────────────────────────
@@ -276,6 +337,20 @@ describe('UsersService', () => {
       const { service, prisma } = makeService();
       prisma.user.update.mockRejectedValue(makeP2025());
       await expect(service.deactivate('missing-id')).rejects.toThrow('missing-id');
+    });
+
+    it('emits user.deactivated event with userId after successful deactivation', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.user.update.mockResolvedValue(makeRawUser({ isActive: false }));
+      await service.deactivate('user-id-1');
+      expect(eventEmitter.emit).toHaveBeenCalledWith('user.deactivated', { userId: 'user-id-1' });
+    });
+
+    it('does not emit user.deactivated event when deactivation fails', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.user.update.mockRejectedValue(makeP2025());
+      await expect(service.deactivate('missing-id')).rejects.toThrow();
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
     });
   });
 });

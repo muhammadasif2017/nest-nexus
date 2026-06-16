@@ -3,6 +3,7 @@ import { VersioningType, ClassSerializerInterceptor, ValidationPipe, RequestMeth
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { RedisIoAdapter } from './modules/notifications/redis-io.adapter';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
@@ -37,6 +38,16 @@ async function bootstrap() {
 
   // ── Logger (must be first so early errors are captured) ───────────────────
   app.useLogger(app.get(Logger));
+
+  // ── WebSocket — Redis adapter (cross-instance fan-out) ────────────────────
+  // Must be configured before listen() so createIOServer picks up the adapter.
+  const redisIoAdapter = new RedisIoAdapter(app);
+  await redisIoAdapter.connectToRedis({
+    host: config.get<string>('redis.host') ?? 'localhost',
+    port: config.get<number>('redis.port') ?? 6379,
+    password: config.get<string | undefined>('redis.password'),
+  });
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // ── CORS ──────────────────────────────────────────────────────────────────
   // Only allow requests from the known frontend origin. Credentials: true is
@@ -170,7 +181,7 @@ async function bootstrap() {
   // is a local variable here so it needs its own cleanup handler.
   app.enableShutdownHooks();
   ['SIGTERM', 'SIGINT'].forEach((sig) =>
-    process.once(sig, () => void pgPool.end()),
+    process.once(sig, () => Promise.all([pgPool.end(), redisIoAdapter.close()])),
   );
 
   await app.listen(PORT);
