@@ -103,6 +103,49 @@ describe('TokenService', () => {
     ctx = makeService();
   });
 
+  // ── generatePendingTwoFactorToken ─────────────────────────────────────────
+
+  describe('generatePendingTwoFactorToken()', () => {
+    it('signs a token with sub, email, empty roles, and scope: two_factor_pending', () => {
+      const user = { id: 'user-id-1', email: 'test@example.com' };
+      ctx.service.generatePendingTwoFactorToken(user);
+      expect(ctx.jwtService.sign).toHaveBeenCalledWith(
+        { sub: 'user-id-1', email: 'test@example.com', roles: [], scope: 'two_factor_pending' },
+        expect.anything(),
+      );
+    });
+
+    it('signs with the access-token secret (jwt.secret)', () => {
+      const user = { id: 'user-id-1', email: 'test@example.com' };
+      ctx.service.generatePendingTwoFactorToken(user);
+      expect(ctx.jwtService.sign).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ secret: 'test-access-secret' }),
+      );
+    });
+
+    it('sets a 5 minute expiry', () => {
+      const user = { id: 'user-id-1', email: 'test@example.com' };
+      ctx.service.generatePendingTwoFactorToken(user);
+      expect(ctx.jwtService.sign).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ expiresIn: '5m' }),
+      );
+    });
+
+    it('returns the signed JWT string', () => {
+      ctx.jwtService.sign.mockReturnValue('pending.jwt.value');
+      const token = ctx.service.generatePendingTwoFactorToken({ id: 'u1', email: 'e@e.com' });
+      expect(token).toBe('pending.jwt.value');
+    });
+
+    it('uses the given user id as the sub claim', () => {
+      ctx.service.generatePendingTwoFactorToken({ id: 'distinct-id', email: 'e@e.com' });
+      const [payload] = ctx.jwtService.sign.mock.calls[0];
+      expect(payload.sub).toBe('distinct-id');
+    });
+  });
+
   // ── generateAccessToken ───────────────────────────────────────────────────
 
   describe('generateAccessToken()', () => {
