@@ -12,13 +12,13 @@ export class DeadLetterService {
   }
 
   async handleFailedJob(job: Job, error: Error): Promise<void> {
+    // job.data is intentionally excluded — it may contain tokens, emails, or other PII.
     const payload = {
       queue: job.queueName,
       jobId: job.id,
       jobName: job.name,
       attemptsMade: job.attemptsMade,
       failedReason: error.message,
-      data: job.data,
       timestamp: new Date().toISOString(),
     };
 

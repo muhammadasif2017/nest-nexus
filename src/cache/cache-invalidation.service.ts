@@ -32,7 +32,14 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
   async onModuleInit(): Promise<void> {
     await this.subscriber.subscribe(CHANNEL);
     this.subscriber.on('message', (_ch: string, raw: string) => {
-      const { keys } = JSON.parse(raw) as { keys: string[] };
+      let keys: string[];
+      try {
+        ({ keys } = JSON.parse(raw) as { keys: string[] });
+      } catch {
+        // Malformed message — log and skip rather than crashing the subscriber.
+        console.warn(`[CacheInvalidation] unparseable message on ${CHANNEL}:`, raw);
+        return;
+      }
       // Cross-instance: another pod invalidated these keys, so we do the same locally.
       void Promise.all(keys.map((k) => this.cache.del(k)));
     });

@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { GqlExecutionContext } from '@nestjs/graphql';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -7,7 +8,7 @@ export class SessionGuard implements CanActivate {
   constructor(private readonly prisma: PrismaService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request>();
+    const request = this.getRequest(context);
     const userId = (request.session as any)?.userId as string | undefined;
 
     if (!userId) {
@@ -26,5 +27,12 @@ export class SessionGuard implements CanActivate {
     // Populate req.user so @CurrentUser() works on session-protected routes
     (request as any).user = user;
     return true;
+  }
+
+  private getRequest(context: ExecutionContext): Request {
+    if (context.getType() === 'http') {
+      return context.switchToHttp().getRequest<Request>();
+    }
+    return GqlExecutionContext.create(context).getContext<{ req: Request }>().req;
   }
 }

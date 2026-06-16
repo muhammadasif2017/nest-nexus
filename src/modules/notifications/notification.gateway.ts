@@ -23,7 +23,18 @@ interface AuthenticatedSocket extends Socket {
 }
 
 @WebSocketGateway({
-  cors: { origin: '*', credentials: true },
+  cors: {
+    // ConfigService is unavailable at decorator evaluation time (runs before DI).
+    // Origin is validated per-request against CLIENT_ORIGIN env var.
+    origin: (
+      reqOrigin: string | undefined,
+      cb: (err: Error | null, allow: boolean) => void,
+    ) => {
+      const allowed = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
+      cb(null, !reqOrigin || reqOrigin === allowed);
+    },
+    credentials: true,
+  },
   namespace: '/ws',
 })
 export class NotificationGateway
@@ -110,13 +121,14 @@ export class NotificationGateway
     client.emit('pong', { timestamp: new Date().toISOString() });
   }
 
-  // Allows a client to join a shared room (e.g., a team or channel room)
+  // Clients may only join their own user room — prevents one user subscribing to another's events.
   @SubscribeMessage('join:room')
   async handleJoinRoom(
     @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() data: { room: string },
   ): Promise<void> {
-    if (data?.room) {
+    const ownRoom = `user:${client.data.userId}`;
+    if (data?.room && data.room === ownRoom) {
       await client.join(data.room);
       client.emit('room:joined', { room: data.room });
     }

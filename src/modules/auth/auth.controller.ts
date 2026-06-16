@@ -141,8 +141,8 @@ export class AuthController {
       });
     });
 
-    // Store the user payload in the session. The session is persisted to MongoDB
-    // via connect-mongo (configured in main.ts).
+    // Store the user payload in the session. The session is persisted to PostgreSQL
+    // via connect-pg-simple (configured in main.ts).
     (req.session as any).user = auth.user;
     (req.session as any).userId = auth.user.id;
 

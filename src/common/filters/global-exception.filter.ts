@@ -115,7 +115,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
 
   // ── Exception Normalizer ───────────────────────────────────────────────────
   // This is the heart of the filter. It maps any possible exception type
-  // (NestJS, Mongoose, MongoDB, unknown) to a consistent {message, code, statusCode}.
+  // (NestJS, Prisma, unknown) to a consistent {message, code, statusCode}.
   private normalizeException(exception: unknown): {
     message: string;
     code: ErrorCode;
