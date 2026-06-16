@@ -1,42 +1,34 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { RedisLockService } from './redis-lock.service';
+import { RedisClientService } from '../redis/redis-client.service';
 
-// Mock ioredis — no real Redis in unit tests
-jest.mock('ioredis', () => {
-  return jest.fn().mockImplementation(() => ({
-    set: jest.fn(),
-    eval: jest.fn(),
-    quit: jest.fn().mockResolvedValue('OK'),
-  }));
+const makeRedisMock = () => ({
+  set: jest.fn(),
+  eval: jest.fn(),
 });
 
-const mockConfig = () => ({
-  get: jest.fn((key: string) => {
-    const map: Record<string, unknown> = {
-      'redis.host': 'localhost',
-      'redis.port': 6379,
-      'redis.password': undefined,
-    };
-    return map[key];
-  }),
+const makeRedisClientServiceMock = () => ({
+  client: makeRedisMock(),
 });
 
 describe('RedisLockService', () => {
   let service: RedisLockService;
-  let redis: { set: jest.Mock; eval: jest.Mock; quit: jest.Mock };
+  let redis: ReturnType<typeof makeRedisMock>;
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    const redisClientService = makeRedisClientServiceMock();
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RedisLockService,
-        { provide: ConfigService, useValue: mockConfig() },
+        { provide: RedisClientService, useValue: redisClientService },
       ],
     }).compile();
     service = module.get(RedisLockService);
-    redis = (service as any).redis;
+    redis = redisClientService.client;
   });
+
+  // ── acquire ────────────────────────────────────────────────────────────────
 
   describe('acquire', () => {
     it('returns a token string when Redis SET NX succeeds', async () => {
@@ -51,7 +43,21 @@ describe('RedisLockService', () => {
       const token = await service.acquire('my-lock', 30);
       expect(token).toBeNull();
     });
+
+    it('uses default TTL of 30 seconds when not specified', async () => {
+      redis.set.mockResolvedValue('OK');
+      await service.acquire('my-lock');
+      expect(redis.set).toHaveBeenCalledWith('lock:my-lock', expect.any(String), 'EX', 30, 'NX');
+    });
+
+    it('prefixes key with "lock:" to namespace from other Redis keys', async () => {
+      redis.set.mockResolvedValue('OK');
+      await service.acquire('cleanup:tokens', 60);
+      expect(redis.set).toHaveBeenCalledWith('lock:cleanup:tokens', expect.any(String), 'EX', 60, 'NX');
+    });
   });
+
+  // ── release ────────────────────────────────────────────────────────────────
 
   describe('release', () => {
     it('calls Lua eval with lock key and token', async () => {
@@ -69,7 +75,17 @@ describe('RedisLockService', () => {
       redis.eval.mockResolvedValue(0);
       await expect(service.release('my-lock', 'stale-token')).resolves.toBeUndefined();
     });
+
+    it('Lua script checks ownership before deleting', async () => {
+      redis.eval.mockResolvedValue(1);
+      await service.release('my-lock', 'token-xyz');
+      const [script] = redis.eval.mock.calls[0];
+      expect(script).toContain('ARGV[1]'); // script checks owner token
+      expect(script).toContain('del');     // script deletes if match
+    });
   });
+
+  // ── withLock ───────────────────────────────────────────────────────────────
 
   describe('withLock', () => {
     it('executes fn and releases lock when acquired', async () => {
@@ -103,12 +119,13 @@ describe('RedisLockService', () => {
       await expect(service.withLock('my-lock', fn, 30)).rejects.toThrow('task failed');
       expect(redis.eval).toHaveBeenCalledTimes(1); // release still called in finally
     });
-  });
 
-  describe('onModuleDestroy', () => {
-    it('calls quit on the Redis connection', async () => {
-      await service.onModuleDestroy();
-      expect(redis.quit).toHaveBeenCalled();
+    it('uses default TTL of 30 when not specified', async () => {
+      redis.set.mockResolvedValue('OK');
+      redis.eval.mockResolvedValue(1);
+      const fn = jest.fn().mockResolvedValue(null);
+      await service.withLock('my-lock', fn);
+      expect(redis.set).toHaveBeenCalledWith('lock:my-lock', expect.any(String), 'EX', 30, 'NX');
     });
   });
 });

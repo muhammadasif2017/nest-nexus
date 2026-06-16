@@ -1,19 +1,21 @@
 import 'reflect-metadata';
+import crypto from 'crypto';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
 import { TokenService } from './token.service';
 import { PrismaService } from '../../prisma/prisma.service';
 
-// ── Bcrypt mock ───────────────────────────────────────────────────────────────
-jest.mock('bcrypt', () => ({
-  compare: jest.fn(),
-  hash: jest.fn().mockResolvedValue('hashed-token'),
-}));
+// ── Hash helpers — mirrors TokenService.hashRefreshToken (SHA-256) ────────────
+const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 
-const bcryptCompare = bcrypt.compare as jest.Mock;
-const bcryptHash = bcrypt.hash as jest.Mock;
+// The JWT mock always returns this string, so we can precompute its hash
+const SIGNED_JWT = 'signed.jwt.token';
+const SIGNED_JWT_HASH = sha256(SIGNED_JWT);
+
+// Known raw token used in rotateRefreshToken tests
+const RAW_TOKEN = 'raw.token';
+const RAW_TOKEN_HASH = sha256(RAW_TOKEN);
 
 // ── Mock factories ────────────────────────────────────────────────────────────
 
@@ -99,8 +101,6 @@ describe('TokenService', () => {
 
   beforeEach(() => {
     ctx = makeService();
-    bcryptCompare.mockReset();
-    bcryptHash.mockResolvedValue('hashed-token');
   });
 
   // ── generateAccessToken ───────────────────────────────────────────────────
@@ -141,7 +141,7 @@ describe('TokenService', () => {
       await ctx.service.generateRefreshToken('user-id-1');
       expect(ctx.prisma.refreshToken.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ userId: 'user-id-1', tokenHash: 'hashed-token' }),
+          data: expect.objectContaining({ userId: 'user-id-1', tokenHash: SIGNED_JWT_HASH }),
         }),
       );
     });
@@ -191,11 +191,11 @@ describe('TokenService', () => {
 
   describe('rotateRefreshToken()', () => {
     const setupHappyPath = (c: Context) => {
-      const rt = makeRefreshToken();
+      // tokenHash must match SHA256(rawToken) for the service to find the token
+      const rt = makeRefreshToken({ tokenHash: RAW_TOKEN_HASH });
       c.jwtService.verify.mockReturnValue(makeRefreshPayload());
       c.prisma.user.findUnique.mockResolvedValue(makeUser());
       c.prisma.refreshToken.findMany.mockResolvedValue([rt]);
-      bcryptCompare.mockResolvedValue(true);
       return rt;
     };
 
@@ -208,8 +208,8 @@ describe('TokenService', () => {
 
     it('verifies JWT with refreshSecret', async () => {
       setupHappyPath(ctx);
-      await ctx.service.rotateRefreshToken('raw.token');
-      expect(ctx.jwtService.verify).toHaveBeenCalledWith('raw.token', {
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
+      expect(ctx.jwtService.verify).toHaveBeenCalledWith(RAW_TOKEN, {
         secret: 'test-refresh-secret',
       });
     });
@@ -219,18 +219,18 @@ describe('TokenService', () => {
     it('throws UnauthorizedException when user is not found', async () => {
       ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
       ctx.prisma.user.findUnique.mockResolvedValue(null);
-      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      await expect(ctx.service.rotateRefreshToken(RAW_TOKEN)).rejects.toThrow(UnauthorizedException);
     });
 
     it('throws UnauthorizedException when user is inactive', async () => {
       ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
       ctx.prisma.user.findUnique.mockResolvedValue(makeUser({ isActive: false }));
-      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      await expect(ctx.service.rotateRefreshToken(RAW_TOKEN)).rejects.toThrow(UnauthorizedException);
     });
 
     it('queries user by sub from JWT payload', async () => {
       setupHappyPath(ctx);
-      await ctx.service.rotateRefreshToken('raw.token');
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
       expect(ctx.prisma.user.findUnique).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'user-id-1' } }),
       );
@@ -242,16 +242,15 @@ describe('TokenService', () => {
       ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
       ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
       ctx.prisma.refreshToken.findMany.mockResolvedValue([]);
-      bcryptCompare.mockResolvedValue(false);
-      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      await expect(ctx.service.rotateRefreshToken(RAW_TOKEN)).rejects.toThrow(UnauthorizedException);
     });
 
     it('revokes token family and throws when hash does not match (reuse detection)', async () => {
       ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
       ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
+      // tokenHash is 'hashed-old-token' — does NOT match SHA256(RAW_TOKEN), triggering reuse detection
       ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken()]);
-      bcryptCompare.mockResolvedValue(false);
-      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      await expect(ctx.service.rotateRefreshToken(RAW_TOKEN)).rejects.toThrow(UnauthorizedException);
       expect(ctx.prisma.refreshToken.deleteMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: expect.objectContaining({ userId: 'user-id-1', family: 'family-1' }),
@@ -262,9 +261,9 @@ describe('TokenService', () => {
     it('throws UnauthorizedException when matched token is already revoked', async () => {
       ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
       ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
-      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken({ isRevoked: true })]);
-      bcryptCompare.mockResolvedValue(true);
-      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      // tokenHash matches RAW_TOKEN but token is revoked
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken({ tokenHash: RAW_TOKEN_HASH, isRevoked: true })]);
+      await expect(ctx.service.rotateRefreshToken(RAW_TOKEN)).rejects.toThrow(UnauthorizedException);
     });
 
     // ── Ordering invariant: step 4 (revoke old) BEFORE step 5 (issue new) ─
@@ -275,7 +274,7 @@ describe('TokenService', () => {
       ctx.prisma.refreshToken.update.mockImplementation(async () => { callOrder.push('update'); return {}; });
       ctx.prisma.refreshToken.create.mockImplementation(async () => { callOrder.push('create'); return {}; });
 
-      await ctx.service.rotateRefreshToken('raw.token');
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
       const updateIdx = callOrder.indexOf('update');
       const createIdx = callOrder.indexOf('create');
       expect(updateIdx).toBeGreaterThanOrEqual(0);
@@ -285,7 +284,7 @@ describe('TokenService', () => {
 
     it('marks old token as isRevoked via prisma.refreshToken.update', async () => {
       const rt = setupHappyPath(ctx);
-      await ctx.service.rotateRefreshToken('raw.token');
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
       expect(ctx.prisma.refreshToken.update).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: rt.id }, data: { isRevoked: true } }),
       );
@@ -295,7 +294,7 @@ describe('TokenService', () => {
 
     it('returns accessToken, refreshToken, and userId on success', async () => {
       setupHappyPath(ctx);
-      const result = await ctx.service.rotateRefreshToken('raw.token');
+      const result = await ctx.service.rotateRefreshToken(RAW_TOKEN);
       expect(result).toMatchObject({
         userId: 'user-id-1',
         accessToken: expect.any(String),
@@ -305,7 +304,7 @@ describe('TokenService', () => {
 
     it('preserves the existing token family in the new token', async () => {
       setupHappyPath(ctx);
-      await ctx.service.rotateRefreshToken('raw.token');
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
       const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
       expect(data.family).toBe('family-1');
     });

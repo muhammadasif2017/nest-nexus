@@ -12,6 +12,7 @@ const validConfig = {
   JWT_EXPIRES_IN: '15m',
   JWT_REFRESH_SECRET: 'c'.repeat(32),
   JWT_REFRESH_EXPIRES_IN: '7d',
+  TOTP_ENCRYPTION_KEY: 'a'.repeat(64), // 64 hex chars = 32 bytes for AES-256
 };
 
 describe('configValidationSchema', () => {
@@ -163,6 +164,30 @@ describe('configValidationSchema', () => {
     it('throws when JWT_REFRESH_SECRET is missing', () => {
       const { JWT_REFRESH_SECRET: _, ...rest } = validConfig;
       expect(() => configValidationSchema(rest)).toThrow();
+    });
+  });
+
+  describe('TOTP_ENCRYPTION_KEY validation', () => {
+    it('accepts a valid 64-char hex key', () => {
+      const result = configValidationSchema({ ...validConfig, TOTP_ENCRYPTION_KEY: 'f'.repeat(64) });
+      expect(result.TOTP_ENCRYPTION_KEY).toHaveLength(64);
+    });
+
+    it('throws when TOTP_ENCRYPTION_KEY is missing', () => {
+      const { TOTP_ENCRYPTION_KEY: _, ...rest } = validConfig;
+      expect(() => configValidationSchema(rest)).toThrow();
+    });
+
+    it('throws when TOTP_ENCRYPTION_KEY is shorter than 64 chars', () => {
+      expect(() =>
+        configValidationSchema({ ...validConfig, TOTP_ENCRYPTION_KEY: 'a'.repeat(63) }),
+      ).toThrow();
+    });
+
+    it('throws when TOTP_ENCRYPTION_KEY contains non-hex characters', () => {
+      expect(() =>
+        configValidationSchema({ ...validConfig, TOTP_ENCRYPTION_KEY: 'g'.repeat(64) }),
+      ).toThrow();
     });
   });
 
