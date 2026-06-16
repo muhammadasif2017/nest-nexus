@@ -5,8 +5,7 @@ import {
 import { GqlExceptionFilter, GqlArgumentsHost } from '@nestjs/graphql';
 import { GraphQLError } from 'graphql';
 import { Request, Response } from 'express';
-import { MongoError } from 'mongodb';
-import { Error as MongooseError } from 'mongoose';
+import { Prisma } from '@prisma/client';
 import { ThrottlerException } from '@nestjs/throttler';
 
 // ── Custom Error Codes ──────────────────────────────────────────────────────
@@ -116,7 +115,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
 
   // ── Exception Normalizer ───────────────────────────────────────────────────
   // This is the heart of the filter. It maps any possible exception type
-  // (NestJS, Mongoose, MongoDB, unknown) to a consistent {message, code, statusCode}.
+  // (NestJS, Prisma, unknown) to a consistent {message, code, statusCode}.
   private normalizeException(exception: unknown): {
     message: string;
     code: ErrorCode;
@@ -153,28 +152,26 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       };
     }
 
-    // ── MongoDB Duplicate Key Error (code 11000) ───────────────────────────
-    // Mongoose doesn't wrap this in an HttpException — it surfaces as a raw MongoError.
-    // This commonly happens when trying to register with an existing email.
-    if (exception instanceof MongoError && (exception as any).code === 11000) {
-      const keyPattern = (exception as any).keyValue;
-      const field = Object.keys(keyPattern ?? {})[0] ?? 'field';
-      return {
-        message: `A record with this ${field} already exists.`,
-        code: ErrorCode.CONFLICT,
-        statusCode: HttpStatus.CONFLICT,
-      };
-    }
-
-    // ── Mongoose Validation Error ─────────────────────────────────────────
-    // Fired when a document fails Mongoose schema-level validation (e.g., required, enum)
-    if (exception instanceof MongooseError.ValidationError) {
-      const messages = Object.values(exception.errors).map((e) => e.message);
-      return {
-        message: messages.join('; '),
-        code: ErrorCode.VALIDATION_ERROR,
-        statusCode: HttpStatus.UNPROCESSABLE_ENTITY,
-      };
+    // ── Prisma Known Request Errors ────────────────────────────────────────
+    if (exception instanceof Prisma.PrismaClientKnownRequestError) {
+      if (exception.code === 'P2002') {
+        // Unique constraint violation — e.g., duplicate email on register
+        const fields = (exception.meta?.target as string[]) ?? [];
+        const field = fields[0] ?? 'field';
+        return {
+          message: `A record with this ${field} already exists.`,
+          code: ErrorCode.CONFLICT,
+          statusCode: HttpStatus.CONFLICT,
+        };
+      }
+      if (exception.code === 'P2025') {
+        // Record not found — e.g., update/delete on a missing row
+        return {
+          message: 'Record not found.',
+          code: ErrorCode.NOT_FOUND,
+          statusCode: HttpStatus.NOT_FOUND,
+        };
+      }
     }
 
     // ── Unknown/Unhandled Exceptions ───────────────────────────────────────

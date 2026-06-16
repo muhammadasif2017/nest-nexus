@@ -5,7 +5,7 @@ const validConfig = {
   PORT: '3000',
   CLIENT_ORIGIN: 'http://localhost:3000',
   SESSION_SECRET: 'a'.repeat(32),
-  MONGODB_URI: 'mongodb://localhost:27017/test',
+  DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/nest_nexus',
   REDIS_HOST: 'localhost',
   REDIS_PORT: '6379',
   JWT_SECRET: 'b'.repeat(32),
@@ -121,24 +121,24 @@ describe('configValidationSchema', () => {
     });
   });
 
-  describe('MONGODB_URI validation', () => {
-    it('throws when MONGODB_URI does not start with mongodb', () => {
+  describe('DATABASE_URL validation', () => {
+    it('throws when DATABASE_URL does not start with postgresql', () => {
       expect(() =>
-        configValidationSchema({ ...validConfig, MONGODB_URI: 'postgres://localhost/db' }),
+        configValidationSchema({ ...validConfig, DATABASE_URL: 'mongodb://localhost/db' }),
       ).toThrow();
     });
 
-    it('throws when MONGODB_URI is missing', () => {
-      const { MONGODB_URI: _, ...rest } = validConfig;
+    it('throws when DATABASE_URL is missing', () => {
+      const { DATABASE_URL: _, ...rest } = validConfig;
       expect(() => configValidationSchema(rest)).toThrow();
     });
 
-    it('accepts mongodb+srv URI', () => {
+    it('accepts a full postgresql connection string', () => {
       const result = configValidationSchema({
         ...validConfig,
-        MONGODB_URI: 'mongodb+srv://user:pass@cluster.mongodb.net/db',
+        DATABASE_URL: 'postgresql://user:pass@host:5432/mydb',
       });
-      expect(result.MONGODB_URI).toMatch(/^mongodb/);
+      expect(result.DATABASE_URL).toMatch(/^postgresql/);
     });
   });
 

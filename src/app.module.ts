@@ -2,13 +2,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 // Config factories (typed, validated)
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import redisConfig from './config/redis.config';
 import jwtConfig from './config/jwt.config';
+import oauthConfig from './config/oauth.config';
+import storageConfig from './config/storage.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
 // Infrastructure modules
@@ -19,11 +22,13 @@ import { QueuesModule } from './queues/queues.module';
 import { EventsModule } from './events/events.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 // Feature modules (one per domain)
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
-import { NotificationsModule } from './modules/notifications/notifications.module';
+import { NotificationsModule } from './modules/notifications/notification.module';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -32,7 +37,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     // validationSchema applies Zod/Joi at startup — fail fast if env is misconfigured
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, jwtConfig],
+      load: [appConfig, databaseConfig, redisConfig, jwtConfig, oauthConfig, storageConfig],
       validate: configValidationSchema, // Throws on startup if .env is invalid
       cache: true, // Caches parsed config in memory — minor perf win
     }),
@@ -61,20 +66,23 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     EventsModule,
     SchedulerModule,
     HealthModule,
+    MetricsModule,
 
     // Feature Modules
     AuthModule,
     UsersModule,
     NotificationsModule,
+    StorageModule,
   ],
 
   providers: [
-    // ── Global Rate Limiting Guard ─────────────────────────────────────────
-    // Registering ThrottlerGuard as APP_GUARD applies it to EVERY route globally.
-    // This is the correct pattern — avoids decorating every controller.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
     },
   ],
 })

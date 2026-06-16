@@ -1,727 +1,447 @@
 import 'reflect-metadata';
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import * as bcrypt from 'bcrypt';
 import { TokenService } from './token.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
-jest.mock('bcrypt', () => ({ hash: jest.fn(), compare: jest.fn() }));
-jest.mock('crypto', () => ({
-  ...jest.requireActual('crypto'),
-  randomUUID: jest.fn().mockReturnValue('fixed-uuid'),
+// ── Bcrypt mock ───────────────────────────────────────────────────────────────
+jest.mock('bcrypt', () => ({
+  compare: jest.fn(),
+  hash: jest.fn().mockResolvedValue('hashed-token'),
 }));
 
-import bcrypt from 'bcrypt';
-import crypto from 'crypto';
+const bcryptCompare = bcrypt.compare as jest.Mock;
+const bcryptHash = bcrypt.hash as jest.Mock;
 
-// ── Factories ─────────────────────────────────────────────────────────────────
+// ── Mock factories ────────────────────────────────────────────────────────────
 
 const makeJwtServiceMock = () => ({
-  sign: jest.fn().mockReturnValue('signed-token'),
+  sign: jest.fn().mockReturnValue('signed.jwt.token'),
   verify: jest.fn(),
 });
 
 const makeConfigMock = () => ({
-  get: jest.fn((key: string) => {
+  get: jest.fn().mockImplementation((key: string) => {
     const map: Record<string, string> = {
-      'jwt.secret': 'test-jwt-secret',
+      'jwt.secret': 'test-access-secret',
       'jwt.expiresIn': '15m',
       'jwt.refreshSecret': 'test-refresh-secret',
       'jwt.refreshExpiresIn': '7d',
       'app.nodeEnv': 'test',
     };
-    return map[key];
+    return map[key] ?? null;
   }),
 });
 
-const makeRefreshToken = (overrides: Record<string, unknown> = {}) => ({
-  tokenHash: '$2b$08$somehash',
-  jti: 'jti-1',
-  family: 'family-1',
-  isRevoked: false,
-  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-  deviceId: 'device-1',
-  deviceName: 'Windows Device',
-  userAgent: 'Mozilla/5.0 (Windows NT 10.0)',
-  lastUsedAt: new Date(Date.now() - 1000),
-  createdAt: new Date(Date.now() - 2000),
-  ...overrides,
+const makePrismaMock = () => ({
+  user: {
+    findUnique: jest.fn(),
+  },
+  refreshToken: {
+    create: jest.fn().mockResolvedValue({}),
+    findMany: jest.fn().mockResolvedValue([]),
+    update: jest.fn().mockResolvedValue({}),
+    deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+  },
 });
 
-const makeUserDoc = (tokens = [makeRefreshToken()], overrides: Record<string, unknown> = {}) => ({
-  _id: { toString: () => 'user-id-1' },
-  email: 'user@test.com',
-  roles: ['user'],
-  isActive: true,
-  refreshTokens: tokens,
-  ...overrides,
-});
-
-const makeModelMock = () => {
-  const execForFind = jest.fn().mockResolvedValue(null);
-  const lean = jest.fn().mockReturnValue({ exec: execForFind });
-  const select = jest.fn().mockReturnValue({ exec: execForFind, lean });
-
-  return {
-    findById: jest.fn().mockReturnValue({ select }),
-    findByIdAndUpdate: jest.fn().mockResolvedValue(null),
-    _exec: execForFind,
-    _select: select,
-    _lean: lean,
-  };
-};
+type Context = ReturnType<typeof makeService>;
 
 const makeService = () => {
   const jwtService = makeJwtServiceMock();
   const config = makeConfigMock();
-  const model = makeModelMock();
-  const service = new TokenService(jwtService as any, config as any, model as any);
-  return { service, jwtService, config, model };
+  const prisma = makePrismaMock();
+  const service = new TokenService(
+    jwtService as unknown as JwtService,
+    config as unknown as ConfigService,
+    prisma as unknown as PrismaService,
+  );
+  return { service, jwtService, config, prisma };
 };
+
+const makeUser = (overrides: Record<string, unknown> = {}) => ({
+  id: 'user-id-1',
+  email: 'test@example.com',
+  roles: ['user'],
+  isActive: true,
+  ...overrides,
+});
+
+const makeRefreshToken = (overrides: Record<string, unknown> = {}) => ({
+  id: 'rt-id-1',
+  userId: 'user-id-1',
+  tokenHash: 'hashed-old-token',
+  jti: 'jti-1',
+  family: 'family-1',
+  isRevoked: false,
+  deviceId: 'device-id-1',
+  deviceName: 'Windows Device',
+  userAgent: 'Mozilla/5.0 (Windows NT 10.0)',
+  lastUsedAt: new Date('2024-01-15T10:00:00Z'),
+  createdAt: new Date('2024-01-01T10:00:00Z'),
+  expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+  ...overrides,
+});
+
+const makeRefreshPayload = (overrides: Record<string, unknown> = {}) => ({
+  sub: 'user-id-1',
+  jti: 'jti-1',
+  family: 'family-1',
+  ...overrides,
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('TokenService', () => {
-  beforeEach(() => jest.clearAllMocks());
+  let ctx: Context;
+
+  beforeEach(() => {
+    ctx = makeService();
+    bcryptCompare.mockReset();
+    bcryptHash.mockResolvedValue('hashed-token');
+  });
 
   // ── generateAccessToken ───────────────────────────────────────────────────
 
   describe('generateAccessToken()', () => {
-    const user = {
-      _id: { toString: () => 'user-id-1' },
-      email: 'user@test.com',
-      roles: ['user', 'admin'],
-    };
-
     it('calls jwtService.sign with correct payload', () => {
-      const { service, jwtService } = makeService();
-
-      service.generateAccessToken(user);
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        { sub: 'user-id-1', email: 'user@test.com', roles: ['user', 'admin'] },
-        expect.objectContaining({ secret: 'test-jwt-secret' }),
+      const user = makeUser();
+      ctx.service.generateAccessToken(user);
+      expect(ctx.jwtService.sign).toHaveBeenCalledWith(
+        { sub: 'user-id-1', email: 'test@example.com', roles: ['user'] },
+        expect.objectContaining({ secret: 'test-access-secret' }),
       );
     });
 
-    it('uses jwt.secret from config', () => {
-      const { service, jwtService } = makeService();
-
-      service.generateAccessToken(user);
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ secret: 'test-jwt-secret' }),
-      );
+    it('returns the signed JWT string', () => {
+      ctx.jwtService.sign.mockReturnValue('access.jwt.value');
+      const token = ctx.service.generateAccessToken(makeUser());
+      expect(token).toBe('access.jwt.value');
     });
 
-    it('uses jwt.expiresIn from config', () => {
-      const { service, jwtService } = makeService();
-
-      service.generateAccessToken(user);
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ expiresIn: '15m' }),
-      );
+    it('includes roles array in payload', () => {
+      ctx.service.generateAccessToken(makeUser({ roles: ['user', 'admin'] }));
+      const [payload] = ctx.jwtService.sign.mock.calls[0];
+      expect(payload.roles).toEqual(['user', 'admin']);
     });
 
-    it('returns the signed token string', () => {
-      const { service } = makeService();
-
-      const result = service.generateAccessToken(user);
-
-      expect(result).toBe('signed-token');
-    });
-
-    it('converts _id to string in sub claim', () => {
-      const { service, jwtService } = makeService();
-      const userWithObjectId = { ...user, _id: { toString: () => 'object-id-string' } };
-
-      service.generateAccessToken(userWithObjectId);
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: 'object-id-string' }),
-        expect.anything(),
-      );
+    it('uses user.id as sub claim', () => {
+      ctx.service.generateAccessToken({ id: 'exact-id', email: 'e@e.com', roles: [] });
+      const [payload] = ctx.jwtService.sign.mock.calls[0];
+      expect(payload.sub).toBe('exact-id');
     });
   });
 
   // ── generateRefreshToken ──────────────────────────────────────────────────
 
   describe('generateRefreshToken()', () => {
-    beforeEach(() => {
-      (bcrypt.hash as jest.Mock).mockResolvedValue('$2b$08$hashed');
-    });
-
-    it('signs JWT with refreshSecret', async () => {
-      const { service, jwtService } = makeService();
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: 'user-id-1' }),
-        expect.objectContaining({ secret: 'test-refresh-secret' }),
+    it('calls prisma.refreshToken.create with tokenHash and userId', async () => {
+      await ctx.service.generateRefreshToken('user-id-1');
+      expect(ctx.prisma.refreshToken.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ userId: 'user-id-1', tokenHash: 'hashed-token' }),
+        }),
       );
     });
 
-    it('signs JWT with refreshExpiresIn', async () => {
-      const { service, jwtService } = makeService();
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ expiresIn: '7d' }),
-      );
+    it('stores jti and family in the DB record', async () => {
+      await ctx.service.generateRefreshToken('user-id-1');
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.jti).toBeDefined();
+      expect(data.family).toBeDefined();
     });
 
-    it('hashes raw token with bcrypt (8 rounds)', async () => {
-      const { service, jwtService } = makeService();
-      jwtService.sign.mockReturnValue('raw-token-value');
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(bcrypt.hash).toHaveBeenCalledWith('raw-token-value', 8);
-    });
-
-    it('stores token hash in DB via $push', async () => {
-      const { service, model } = makeService();
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-        'user-id-1',
-        expect.objectContaining({ $push: expect.objectContaining({ refreshTokens: expect.anything() }) }),
-      );
-    });
-
-    it('uses existingFamily when provided', async () => {
-      const { service, jwtService } = makeService();
-
-      await service.generateRefreshToken('user-id-1', { existingFamily: 'existing-family-id' });
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ family: 'existing-family-id' }),
-        expect.anything(),
-      );
-    });
-
-    it('generates new family when not provided', async () => {
-      const { service, jwtService } = makeService();
-      (crypto.randomUUID as jest.Mock).mockReturnValueOnce('new-jti').mockReturnValueOnce('new-family');
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ family: 'new-family' }),
-        expect.anything(),
-      );
-    });
-
-    it('returns the raw (unhashed) token', async () => {
-      const { service, jwtService } = makeService();
-      jwtService.sign.mockReturnValue('raw-refresh-token');
-
-      const result = await service.generateRefreshToken('user-id-1');
-
-      expect(result).toBe('raw-refresh-token');
-    });
-
-    it('includes jti in token payload', async () => {
-      const { service, jwtService } = makeService();
-      (crypto.randomUUID as jest.Mock).mockReturnValue('fixed-jti');
-
-      await service.generateRefreshToken('user-id-1');
-
-      expect(jwtService.sign).toHaveBeenCalledWith(
-        expect.objectContaining({ jti: 'fixed-jti' }),
-        expect.anything(),
-      );
+    it('uses existingFamily option when provided', async () => {
+      await ctx.service.generateRefreshToken('user-id-1', { existingFamily: 'my-family' });
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.family).toBe('my-family');
     });
 
     it('stores deviceName from parsed userAgent', async () => {
-      const { service, model } = makeService();
-
-      await service.generateRefreshToken('user-id-1', {
+      await ctx.service.generateRefreshToken('user-id-1', {
         userAgent: 'Mozilla/5.0 (Windows NT 10.0)',
       });
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.deviceName).toBe('Windows Device');
+    });
 
-      expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-        'user-id-1',
-        expect.objectContaining({
-          $push: expect.objectContaining({
-            refreshTokens: expect.objectContaining({ deviceName: 'Windows Device' }),
-          }),
-        }),
-      );
+    it('stores userAgent string in DB', async () => {
+      const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0)';
+      await ctx.service.generateRefreshToken('user-id-1', { userAgent: ua });
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.userAgent).toBe(ua);
+    });
+
+    it('returns the raw (unhashed) JWT token string', async () => {
+      ctx.jwtService.sign.mockReturnValue('raw.refresh.token');
+      const result = await ctx.service.generateRefreshToken('user-id-1');
+      expect(result).toBe('raw.refresh.token');
+    });
+
+    it('uses deviceId option when provided', async () => {
+      await ctx.service.generateRefreshToken('user-id-1', { deviceId: 'my-device-id' });
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.deviceId).toBe('my-device-id');
     });
   });
 
   // ── rotateRefreshToken ────────────────────────────────────────────────────
 
   describe('rotateRefreshToken()', () => {
-    const validPayload = { sub: 'user-id-1', jti: 'jti-1', family: 'family-1' };
-
-    const setupHappyPath = (ctx: ReturnType<typeof makeService>) => {
-      ctx.jwtService.verify.mockReturnValue(validPayload);
-      ctx.model._exec.mockResolvedValue(makeUserDoc([makeRefreshToken()]));
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-      (bcrypt.hash as jest.Mock).mockResolvedValue('$2b$08$newhash');
-      ctx.jwtService.sign.mockReturnValue('new-token');
+    const setupHappyPath = (c: Context) => {
+      const rt = makeRefreshToken();
+      c.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      c.prisma.user.findUnique.mockResolvedValue(makeUser());
+      c.prisma.refreshToken.findMany.mockResolvedValue([rt]);
+      bcryptCompare.mockResolvedValue(true);
+      return rt;
     };
 
-    // Step 1 — JWT verification
-    describe('Step 1: JWT verification', () => {
-      it('throws UnauthorizedException when token signature is invalid', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockImplementation(() => { throw new Error('invalid signature'); });
+    // ── Step 1: JWT verification ──────────────────────────────────────────
 
-        await expect(ctx.service.rotateRefreshToken('bad-token')).rejects.toThrow(UnauthorizedException);
-      });
+    it('throws UnauthorizedException when JWT is invalid', async () => {
+      ctx.jwtService.verify.mockImplementation(() => { throw new Error('expired'); });
+      await expect(ctx.service.rotateRefreshToken('bad.token')).rejects.toThrow(UnauthorizedException);
+    });
 
-      it('throws UnauthorizedException when token is expired', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockImplementation(() => { throw new Error('jwt expired'); });
-
-        await expect(ctx.service.rotateRefreshToken('expired-token')).rejects.toThrow(UnauthorizedException);
-      });
-
-      it('uses jwt.refreshSecret to verify', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-
-        await ctx.service.rotateRefreshToken('valid-token');
-
-        expect(ctx.jwtService.verify).toHaveBeenCalledWith(
-          'valid-token',
-          expect.objectContaining({ secret: 'test-refresh-secret' }),
-        );
-      });
-
-      it('error message does not reveal whether token was expired vs tampered', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockImplementation(() => { throw new Error('jwt expired'); });
-
-        await expect(ctx.service.rotateRefreshToken('expired')).rejects.toThrow(
-          'Invalid or expired refresh token.',
-        );
+    it('verifies JWT with refreshSecret', async () => {
+      setupHappyPath(ctx);
+      await ctx.service.rotateRefreshToken('raw.token');
+      expect(ctx.jwtService.verify).toHaveBeenCalledWith('raw.token', {
+        secret: 'test-refresh-secret',
       });
     });
 
-    // Step 2 — User lookup
-    describe('Step 2: User lookup', () => {
-      it('throws UnauthorizedException when user not found', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        ctx.model._exec.mockResolvedValue(null);
+    // ── Step 2: User lookup ───────────────────────────────────────────────
 
-        await expect(ctx.service.rotateRefreshToken('token')).rejects.toThrow(UnauthorizedException);
-      });
+    it('throws UnauthorizedException when user is not found', async () => {
+      ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      ctx.prisma.user.findUnique.mockResolvedValue(null);
+      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+    });
 
-      it('throws UnauthorizedException when user is inactive', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        ctx.model._exec.mockResolvedValue(makeUserDoc([], { isActive: false }));
+    it('throws UnauthorizedException when user is inactive', async () => {
+      ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      ctx.prisma.user.findUnique.mockResolvedValue(makeUser({ isActive: false }));
+      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+    });
 
-        await expect(ctx.service.rotateRefreshToken('token')).rejects.toThrow(UnauthorizedException);
-      });
+    it('queries user by sub from JWT payload', async () => {
+      setupHappyPath(ctx);
+      await ctx.service.rotateRefreshToken('raw.token');
+      expect(ctx.prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'user-id-1' } }),
+      );
+    });
 
-      it('selects refreshTokens, email, roles, isActive fields', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
+    // ── Step 3: Token hash matching ───────────────────────────────────────
 
-        await ctx.service.rotateRefreshToken('valid-token');
+    it('throws UnauthorizedException when no family tokens exist', async () => {
+      ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([]);
+      bcryptCompare.mockResolvedValue(false);
+      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+    });
 
-        expect(ctx.model._select).toHaveBeenCalledWith(
-          '+refreshTokens email roles isActive',
-        );
+    it('revokes token family and throws when hash does not match (reuse detection)', async () => {
+      ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken()]);
+      bcryptCompare.mockResolvedValue(false);
+      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+      expect(ctx.prisma.refreshToken.deleteMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ userId: 'user-id-1', family: 'family-1' }),
+        }),
+      );
+    });
+
+    it('throws UnauthorizedException when matched token is already revoked', async () => {
+      ctx.jwtService.verify.mockReturnValue(makeRefreshPayload());
+      ctx.prisma.user.findUnique.mockResolvedValue(makeUser());
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken({ isRevoked: true })]);
+      bcryptCompare.mockResolvedValue(true);
+      await expect(ctx.service.rotateRefreshToken('raw.token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    // ── Ordering invariant: step 4 (revoke old) BEFORE step 5 (issue new) ─
+
+    it('revokes old token BEFORE creating new token', async () => {
+      setupHappyPath(ctx);
+      const callOrder: string[] = [];
+      ctx.prisma.refreshToken.update.mockImplementation(async () => { callOrder.push('update'); return {}; });
+      ctx.prisma.refreshToken.create.mockImplementation(async () => { callOrder.push('create'); return {}; });
+
+      await ctx.service.rotateRefreshToken('raw.token');
+      const updateIdx = callOrder.indexOf('update');
+      const createIdx = callOrder.indexOf('create');
+      expect(updateIdx).toBeGreaterThanOrEqual(0);
+      expect(createIdx).toBeGreaterThanOrEqual(0);
+      expect(updateIdx).toBeLessThan(createIdx);
+    });
+
+    it('marks old token as isRevoked via prisma.refreshToken.update', async () => {
+      const rt = setupHappyPath(ctx);
+      await ctx.service.rotateRefreshToken('raw.token');
+      expect(ctx.prisma.refreshToken.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: rt.id }, data: { isRevoked: true } }),
+      );
+    });
+
+    // ── Happy path ────────────────────────────────────────────────────────
+
+    it('returns accessToken, refreshToken, and userId on success', async () => {
+      setupHappyPath(ctx);
+      const result = await ctx.service.rotateRefreshToken('raw.token');
+      expect(result).toMatchObject({
+        userId: 'user-id-1',
+        accessToken: expect.any(String),
+        refreshToken: expect.any(String),
       });
     });
 
-    // Step 3 — Hash matching
-    describe('Step 3: Token hash matching', () => {
-      it('calls bcrypt.compare for tokens in the same family', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-
-        await ctx.service.rotateRefreshToken('raw-token');
-
-        expect(bcrypt.compare).toHaveBeenCalledWith('raw-token', '$2b$08$somehash');
-      });
-
-      it('does not compare tokens from a different family', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue({ ...validPayload, family: 'family-1' });
-        ctx.model._exec.mockResolvedValue(
-          makeUserDoc([makeRefreshToken({ family: 'different-family' })]),
-        );
-        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-        await expect(ctx.service.rotateRefreshToken('token')).rejects.toThrow();
-        expect(bcrypt.compare).not.toHaveBeenCalled();
-      });
-    });
-
-    // Step 4 — Reuse detection
-    describe('Step 4: Reuse detection', () => {
-      it('revokes the entire family when token already rotated (suspected theft)', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        // Family exists but bcrypt.compare returns false — token was already rotated out
-        ctx.model._exec.mockResolvedValue(makeUserDoc([makeRefreshToken({ family: 'family-1' })]));
-        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-        await expect(ctx.service.rotateRefreshToken('replayed-token')).rejects.toThrow(UnauthorizedException);
-
-        expect(ctx.model.findByIdAndUpdate).toHaveBeenCalledWith(
-          'user-id-1',
-          { $pull: { refreshTokens: { family: 'family-1' } } },
-        );
-      });
-
-      it('throws with reuse-specific message', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        ctx.model._exec.mockResolvedValue(makeUserDoc([makeRefreshToken({ family: 'family-1' })]));
-        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-        await expect(ctx.service.rotateRefreshToken('replayed-token')).rejects.toThrow(
-          'Refresh token has already been used.',
-        );
-      });
-
-      it('does NOT revoke family when no family tokens exist at all', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        // No tokens in this family
-        ctx.model._exec.mockResolvedValue(makeUserDoc([]));
-        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-
-        await expect(ctx.service.rotateRefreshToken('unknown-token')).rejects.toThrow();
-
-        // findByIdAndUpdate should NOT be called for $pull (revoke family)
-        const pullCall = (ctx.model.findByIdAndUpdate as jest.Mock).mock.calls.find(
-          ([, update]) => update.$pull?.refreshTokens?.family,
-        );
-        expect(pullCall).toBeUndefined();
-      });
-    });
-
-    // Step 5 — Revoked check
-    describe('Step 5: Explicit revocation check', () => {
-      it('throws UnauthorizedException when matched token is revoked', async () => {
-        const ctx = makeService();
-        ctx.jwtService.verify.mockReturnValue(validPayload);
-        ctx.model._exec.mockResolvedValue(
-          makeUserDoc([makeRefreshToken({ isRevoked: true })]),
-        );
-        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-
-        await expect(ctx.service.rotateRefreshToken('token')).rejects.toThrow(
-          'Refresh token has been revoked.',
-        );
-      });
-    });
-
-    // Step 6 & 7 — Rotation and ordering invariant
-    describe('Step 6 & 7: Revoke old → issue new (ordering invariant)', () => {
-      it('revokes old token BEFORE issuing new one', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-        (bcrypt.hash as jest.Mock).mockResolvedValue('$2b$08$newhash');
-
-        const callOrder: string[] = [];
-
-        (ctx.model.findByIdAndUpdate as jest.Mock).mockImplementation((_id, update) => {
-          if (update.$set?.['refreshTokens.$[elem].isRevoked'] !== undefined) callOrder.push('revoke');
-          else if (update.$push?.refreshTokens) callOrder.push('issue');
-          return Promise.resolve(null);
-        });
-
-        await ctx.service.rotateRefreshToken('raw-token');
-
-        expect(callOrder[0]).toBe('revoke');
-        expect(callOrder[1]).toBe('issue');
-      });
-
-      it('marks old token as revoked via arrayFilters', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-
-        await ctx.service.rotateRefreshToken('raw-token');
-
-        expect(ctx.model.findByIdAndUpdate).toHaveBeenCalledWith(
-          expect.anything(),
-          { $set: { 'refreshTokens.$[elem].isRevoked': true } },
-          { arrayFilters: [{ 'elem.tokenHash': '$2b$08$somehash' }] },
-        );
-      });
-
-      it('issues new token in the same family', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-
-        await ctx.service.rotateRefreshToken('raw-token');
-
-        // generateRefreshToken is called with existingFamily = payload.family
-        expect(ctx.jwtService.sign).toHaveBeenCalledWith(
-          expect.objectContaining({ family: 'family-1' }),
-          expect.anything(),
-        );
-      });
-
-      it('returns new accessToken, refreshToken, and userId', async () => {
-        const ctx = makeService();
-        setupHappyPath(ctx);
-        ctx.jwtService.sign
-          .mockReturnValueOnce('new-access-token')  // generateRefreshToken
-          .mockReturnValueOnce('new-access-token'); // generateAccessToken
-
-        const result = await ctx.service.rotateRefreshToken('raw-token');
-
-        expect(result.userId).toBe('user-id-1');
-        expect(result.accessToken).toBeDefined();
-        expect(result.refreshToken).toBeDefined();
-      });
+    it('preserves the existing token family in the new token', async () => {
+      setupHappyPath(ctx);
+      await ctx.service.rotateRefreshToken('raw.token');
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.family).toBe('family-1');
     });
   });
 
   // ── revokeAllTokens ───────────────────────────────────────────────────────
 
   describe('revokeAllTokens()', () => {
-    it('clears refreshTokens array for the user', async () => {
-      const { service, model } = makeService();
-
-      await service.revokeAllTokens('user-id-1');
-
-      expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-        'user-id-1',
-        { $set: { refreshTokens: [] } },
-      );
-    });
-
-    it('resolves without returning a value', async () => {
-      const { service } = makeService();
-
-      const result = await service.revokeAllTokens('user-id-1');
-
-      expect(result).toBeUndefined();
-    });
-  });
-
-  // ── getRefreshTokenCookieOptions ──────────────────────────────────────────
-
-  describe('getRefreshTokenCookieOptions()', () => {
-    it('sets httpOnly: true always', () => {
-      const { service } = makeService();
-      expect(service.getRefreshTokenCookieOptions().httpOnly).toBe(true);
-    });
-
-    it('sets sameSite: strict always', () => {
-      const { service } = makeService();
-      expect(service.getRefreshTokenCookieOptions().sameSite).toBe('strict');
-    });
-
-    it('sets path to /api/v1/auth', () => {
-      const { service } = makeService();
-      expect(service.getRefreshTokenCookieOptions().path).toBe('/api/v1/auth');
-    });
-
-    it('sets maxAge to 7 days in ms', () => {
-      const { service } = makeService();
-      expect(service.getRefreshTokenCookieOptions().maxAge).toBe(7 * 24 * 60 * 60 * 1000);
-    });
-
-    it('sets secure: false in non-production', () => {
-      const { service, config } = makeService();
-      config.get.mockReturnValue('test');
-
-      expect(service.getRefreshTokenCookieOptions().secure).toBe(false);
-    });
-
-    it('sets secure: true in production', () => {
-      const { service, config } = makeService();
-      config.get.mockReturnValue('production');
-
-      expect(service.getRefreshTokenCookieOptions().secure).toBe(true);
-    });
-  });
-
-  // ── parseDeviceName ───────────────────────────────────────────────────────
-
-  describe('parseDeviceName()', () => {
-    it('returns Unknown Device when userAgent is undefined', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName(undefined)).toBe('Unknown Device');
-    });
-
-    it('returns iOS Device for iPhone', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0)')).toBe('iOS Device');
-    });
-
-    it('returns iOS Device for iPad', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (iPad; CPU OS 17_0)')).toBe('iOS Device');
-    });
-
-    it('returns Android Device for Android UA', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (Linux; Android 14)')).toBe('Android Device');
-    });
-
-    it('returns Windows Device for Windows UA', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe('Windows Device');
-    });
-
-    it('returns Mac Device for Mac UA', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')).toBe('Mac Device');
-    });
-
-    it('returns Linux Device for Linux UA (non-Android)', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('Mozilla/5.0 (X11; Linux x86_64)')).toBe('Linux Device');
-    });
-
-    it('returns Unknown Device for unrecognized UA', () => {
-      const { service } = makeService();
-      expect(service.parseDeviceName('CustomBot/1.0')).toBe('Unknown Device');
+    it('calls prisma.refreshToken.deleteMany with userId', async () => {
+      await ctx.service.revokeAllTokens('user-id-1');
+      expect(ctx.prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-id-1' },
+      });
     });
   });
 
   // ── listDeviceSessions ────────────────────────────────────────────────────
 
   describe('listDeviceSessions()', () => {
-    it('throws NotFoundException when user not found', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue(null);
-
-      await expect(service.listDeviceSessions('missing-id')).rejects.toThrow(NotFoundException);
-    });
-
-    it('filters out revoked tokens', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ isRevoked: true, deviceId: 'device-1' }),
-          makeRefreshToken({ isRevoked: false, deviceId: 'device-2' }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].deviceId).toBe('device-2');
-    });
-
-    it('filters out expired tokens', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ expiresAt: new Date(Date.now() - 1000), deviceId: 'expired' }),
-          makeRefreshToken({ deviceId: 'active' }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].deviceId).toBe('active');
-    });
-
-    it('filters out tokens without deviceId', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ deviceId: undefined }),
-          makeRefreshToken({ deviceId: 'device-1' }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
-      expect(result).toHaveLength(1);
-    });
-
-    it('deduplicates by deviceId keeping most recent lastUsedAt', async () => {
-      const now = Date.now();
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ deviceId: 'device-1', lastUsedAt: new Date(now - 5000) }),
-          makeRefreshToken({ deviceId: 'device-1', lastUsedAt: new Date(now - 1000) }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].lastUsedAt.getTime()).toBe(now - 1000);
-    });
-
-    it('sorts sessions by lastUsedAt descending', async () => {
-      const now = Date.now();
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ deviceId: 'device-old', lastUsedAt: new Date(now - 10000) }),
-          makeRefreshToken({ deviceId: 'device-new', lastUsedAt: new Date(now - 1000) }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
-      expect(result[0].deviceId).toBe('device-new');
-      expect(result[1].deviceId).toBe('device-old');
-    });
-
-    it('marks isCurrent true for the matching deviceId', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({
-        refreshTokens: [
-          makeRefreshToken({ deviceId: 'this-device' }),
-          makeRefreshToken({ deviceId: 'other-device', lastUsedAt: new Date(Date.now() - 5000) }),
-        ],
-      });
-
-      const result = await service.listDeviceSessions('user-id-1', 'this-device');
-
-      const current = result.find((s) => s.deviceId === 'this-device');
-      const other = result.find((s) => s.deviceId === 'other-device');
-      expect(current?.isCurrent).toBe(true);
-      expect(other?.isCurrent).toBe(false);
-    });
-
-    it('returns empty array when no active sessions', async () => {
-      const { service, model } = makeService();
-      model._exec.mockResolvedValue({ refreshTokens: [] });
-
-      const result = await service.listDeviceSessions('user-id-1');
-
+    it('returns empty array when no active tokens', async () => {
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([]);
+      const result = await ctx.service.listDeviceSessions('user-id-1');
       expect(result).toEqual([]);
+    });
+
+    it('queries only non-revoked, non-expired tokens with a deviceId', async () => {
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([]);
+      await ctx.service.listDeviceSessions('user-id-1');
+      expect(ctx.prisma.refreshToken.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            userId: 'user-id-1',
+            isRevoked: false,
+            deviceId: { not: null },
+          }),
+        }),
+      );
+    });
+
+    it('deduplicates tokens by deviceId, keeping most recent', async () => {
+      const older = makeRefreshToken({ lastUsedAt: new Date('2024-01-01') });
+      const newer = makeRefreshToken({ id: 'rt-id-2', lastUsedAt: new Date('2024-01-10') });
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([older, newer]);
+      const result = await ctx.service.listDeviceSessions('user-id-1');
+      expect(result).toHaveLength(1);
+      expect(result[0].lastUsedAt).toEqual(newer.lastUsedAt);
+    });
+
+    it('returns multiple entries for different deviceIds', async () => {
+      const rt1 = makeRefreshToken({ deviceId: 'device-a' });
+      const rt2 = makeRefreshToken({ id: 'rt-id-2', deviceId: 'device-b' });
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([rt1, rt2]);
+      const result = await ctx.service.listDeviceSessions('user-id-1');
+      expect(result).toHaveLength(2);
+    });
+
+    it('marks current device session with isCurrent=true', async () => {
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken()]);
+      const result = await ctx.service.listDeviceSessions('user-id-1', 'device-id-1');
+      expect(result[0].isCurrent).toBe(true);
+    });
+
+    it('marks non-current device session with isCurrent=false', async () => {
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([makeRefreshToken()]);
+      const result = await ctx.service.listDeviceSessions('user-id-1', 'other-device');
+      expect(result[0].isCurrent).toBe(false);
+    });
+
+    it('maps token fields to DeviceSessionOutput shape', async () => {
+      const rt = makeRefreshToken();
+      ctx.prisma.refreshToken.findMany.mockResolvedValue([rt]);
+      const result = await ctx.service.listDeviceSessions('user-id-1');
+      expect(result[0]).toMatchObject({
+        deviceId: 'device-id-1',
+        deviceName: 'Windows Device',
+        lastUsedAt: rt.lastUsedAt,
+        createdAt: rt.createdAt,
+      });
     });
   });
 
   // ── revokeDeviceSession ───────────────────────────────────────────────────
 
   describe('revokeDeviceSession()', () => {
-    it('pulls all tokens with matching deviceId', async () => {
-      const { service, model } = makeService();
+    it('calls prisma.refreshToken.deleteMany with userId and deviceId', async () => {
+      await ctx.service.revokeDeviceSession('user-id-1', 'device-to-revoke');
+      expect(ctx.prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
+        where: { userId: 'user-id-1', deviceId: 'device-to-revoke' },
+      });
+    });
+  });
 
-      await service.revokeDeviceSession('user-id-1', 'device-to-revoke');
+  // ── parseDeviceName ───────────────────────────────────────────────────────
 
-      expect(model.findByIdAndUpdate).toHaveBeenCalledWith(
-        'user-id-1',
-        { $pull: { refreshTokens: { deviceId: 'device-to-revoke' } } },
-      );
+  describe('parseDeviceName()', () => {
+    const cases: [string | undefined, string][] = [
+      [undefined, 'Unknown Device'],
+      ['', 'Unknown Device'],
+      ['Mozilla/5.0 (iPhone; CPU iPhone OS 14_0)', 'iOS Device'],
+      ['Mozilla/5.0 (iPad; CPU OS 14_0)', 'iOS Device'],
+      ['Mozilla/5.0 (Linux; Android 10)', 'Android Device'],
+      ['Mozilla/5.0 (Windows NT 10.0)', 'Windows Device'],
+      ['Mozilla/5.0 (Macintosh; Intel Mac OS X)', 'Mac Device'],
+      ['Mozilla/5.0 (X11; Linux x86_64)', 'Linux Device'],
+      ['some unknown bot/1.0', 'Unknown Device'],
+    ];
+
+    it.each(cases)('parseDeviceName(%p) → %s', (ua, expected) => {
+      expect(ctx.service.parseDeviceName(ua)).toBe(expected);
+    });
+  });
+
+  // ── getRefreshTokenCookieOptions ──────────────────────────────────────────
+
+  describe('getRefreshTokenCookieOptions()', () => {
+    it('returns httpOnly: true', () => {
+      expect(ctx.service.getRefreshTokenCookieOptions().httpOnly).toBe(true);
     });
 
-    it('resolves without returning a value', async () => {
-      const { service } = makeService();
+    it('returns secure: false in non-production', () => {
+      expect(ctx.service.getRefreshTokenCookieOptions().secure).toBe(false);
+    });
 
-      const result = await service.revokeDeviceSession('user-id-1', 'device-1');
+    it('returns secure: true in production', () => {
+      ctx.config.get.mockImplementation((key: string) =>
+        key === 'app.nodeEnv' ? 'production' : null,
+      );
+      expect(ctx.service.getRefreshTokenCookieOptions().secure).toBe(true);
+    });
 
-      expect(result).toBeUndefined();
+    it('returns sameSite: strict', () => {
+      expect(ctx.service.getRefreshTokenCookieOptions().sameSite).toBe('strict');
+    });
+
+    it('returns path: /api/v1/auth', () => {
+      expect(ctx.service.getRefreshTokenCookieOptions().path).toBe('/api/v1/auth');
     });
   });
 });

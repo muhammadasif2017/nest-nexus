@@ -1,8 +1,10 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { ALLOW_PENDING_2FA_KEY } from '../decorators/allow-pending-2fa.decorator';
+import { JwtPayload } from '../../modules/auth/strategies/jwt.strategy';
 
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -10,29 +12,37 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
     super();
   }
 
-  canActivate(context: ExecutionContext) {
-    // ── Check for @Public() decorator ────────────────────────────────────────
-    // Reflector.getAllAndOverride checks the handler first, then the class.
-    // This means a @Public() on a single resolver overrides a class-level @Roles().
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-
     if (isPublic) return true;
 
-    return super.canActivate(context);
+    const activated = await super.canActivate(context);
+    if (!activated) return false;
+
+    // Tokens with scope='two_factor_pending' are only valid on routes that
+    // explicitly opt in via @AllowPending2FA(). All other routes reject them
+    // so a half-authenticated session can't access protected resources.
+    const request = this.getRequest(context);
+    const user = request.user as JwtPayload | undefined;
+    if (user?.scope === 'two_factor_pending') {
+      const allowed = this.reflector.getAllAndOverride<boolean>(ALLOW_PENDING_2FA_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (!allowed) {
+        throw new UnauthorizedException('Two-factor authentication required to complete login.');
+      }
+    }
+
+    return true;
   }
 
-  // ── GraphQL Context Bridge ──────────────────────────────────────────────────
-  // Passport's AuthGuard calls getRequest() internally to extract the token.
-  // By default, it looks at the HTTP request object. But in GraphQL, the request
-  // is nested inside the GraphQL execution context. We override this to bridge them.
   getRequest(context: ExecutionContext) {
     if (context.getType<string>() === 'graphql') {
       const ctx = GqlExecutionContext.create(context);
-      // This is the Express request object, accessible via the GraphQL context
-      // because we configured it in GraphQLModule (shown below).
       return ctx.getContext().req;
     }
     return context.switchToHttp().getRequest();

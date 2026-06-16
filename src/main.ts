@@ -3,18 +3,25 @@ import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { createBullBoard } from '@bull-board/api';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ExpressAdapter } from '@bull-board/express';
+import { getQueueToken } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
+import { QUEUE_EMAIL } from './queues/queues.constants';
 
 import helmet from 'helmet';
+import { RequestMethod } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
 import compression from 'compression';
 import session from 'express-session';
-import MongoStore from 'connect-mongo';
+import connectPgSimple from 'connect-pg-simple';
+import { Pool } from 'pg';
 
-import { Logger, PinoLogger } from 'nestjs-pino';
+import { Logger } from 'nestjs-pino';
 
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -27,7 +34,7 @@ async function bootstrap() {
   const PORT = config.get<number>('app.port', 3000);
   const NODE_ENV = config.get<string>('app.nodeEnv');
   const SESSION_SECRET = config.get<string>('app.sessionSecret');
-  const MONGO_URI = config.get<string>('database.uri');
+  const DATABASE_URL = config.get<string>('database.url');
   const CLIENT_ORIGIN = config.get<string>('app.clientOrigin');
 
   // ── Logger (must be first so early errors are captured) ───────────────────
@@ -66,17 +73,20 @@ async function bootstrap() {
   }
 
   // ── Session (Hybrid Auth: session-based path) ──────────────────────────────
-  // Sessions are stored in MongoDB to survive server restarts/scale-out.
+  // Sessions are stored in PostgreSQL to survive server restarts/scale-out.
+  const PgSession = connectPgSimple(session);
+  const pgPool = new Pool({ connectionString: DATABASE_URL });
+
   app.use(
     session({
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
-      store: MongoStore.create({ mongoUrl: MONGO_URI }),
+      store: new PgSession({ pool: pgPool, createTableIfMissing: true }),
       cookie: {
-        httpOnly: true, // Prevents JS access — mitigates XSS
-        secure: NODE_ENV === 'production', // HTTPS only in prod
-        sameSite: 'strict', // Mitigates CSRF for session cookie
+        httpOnly: true,
+        secure: NODE_ENV === 'production',
+        sameSite: 'strict',
         maxAge: 1000 * 60 * 60 * 24, // 24 hours
       },
     }),
@@ -104,7 +114,10 @@ async function bootstrap() {
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
   // GraphQL lives at /graphql (unversioned by convention)
-  app.setGlobalPrefix('api');
+  // Exclude /metrics from the API prefix — Prometheus expects to scrape at bare /metrics
+  app.setGlobalPrefix('api', {
+    exclude: [{ path: 'metrics', method: RequestMethod.GET }],
+  });
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   // ── Global Guards (applied to every route) ───────────────────────────────
@@ -129,11 +142,9 @@ async function bootstrap() {
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // ── Global Interceptors ───────────────────────────────────────────────────
-  // ClassSerializerInterceptor respects @Exclude() and @Expose() on DTOs
-  app.useGlobalInterceptors(
-    new ClassSerializerInterceptor(app.get(Reflector)),
-    new LoggingInterceptor(app.get(PinoLogger)), // Logs request/response pairs with timing
-  );
+  // ClassSerializerInterceptor respects @Exclude() and @Expose() on DTOs.
+  // LoggingInterceptor uses @InjectPinoLogger so it's registered via APP_INTERCEPTOR in AppModule.
+  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   // ── Swagger (non-production only) ─────────────────────────────────────────
   if (NODE_ENV !== 'production') {
@@ -149,13 +160,32 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document, {
       swaggerOptions: { persistAuthorization: true },
     });
+
+    // Bull Board — queue monitoring UI at /api/queues
+    const bullBoardAdapter = new ExpressAdapter();
+    bullBoardAdapter.setBasePath('/api/queues');
+    createBullBoard({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      queues: [new BullMQAdapter(app.get<Queue>(getQueueToken(QUEUE_EMAIL))) as any],
+      serverAdapter: bullBoardAdapter,
+    });
+    app.use('/api/queues', bullBoardAdapter.getRouter());
   }
+
+  // Drain the pg pool used by connect-pg-simple when the process shuts down.
+  // NestJS shutdown hooks handle SIGTERM/SIGINT for the app itself; the pool
+  // is a local variable here so it needs its own cleanup handler.
+  app.enableShutdownHooks();
+  ['SIGTERM', 'SIGINT'].forEach((sig) =>
+    process.once(sig, () => void pgPool.end()),
+  );
 
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
   console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
   if (NODE_ENV !== 'production') {
     console.log(`📖 Swagger docs at http://localhost:${PORT}/api/docs`);
+    console.log(`🐂 Bull Board at http://localhost:${PORT}/api/queues`);
   }
 }
 

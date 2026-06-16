@@ -11,8 +11,7 @@ import {
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
 import { GraphQLError } from 'graphql';
-import { Error as MongooseError } from 'mongoose';
-import { MongoError } from 'mongodb';
+import { Prisma } from '@prisma/client';
 import { GlobalExceptionFilter, ErrorCode } from './global-exception.filter';
 
 // ── Mock helpers ─────────────────────────────────────────────────────────────
@@ -49,6 +48,13 @@ const httpHost = (
 
 const gqlHost = (): ArgumentsHost =>
   ({ getType: () => 'graphql' }) as unknown as ArgumentsHost;
+
+const makePrismaError = (code: string, meta?: Record<string, unknown>) =>
+  new Prisma.PrismaClientKnownRequestError('Prisma error', {
+    code,
+    clientVersion: '7.0.0',
+    meta,
+  });
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -148,54 +154,30 @@ describe('GlobalExceptionFilter', () => {
     });
 
     it('maps ThrottlerException → 429 RATE_LIMITED', () => {
-      // ThrottlerException extends HttpException so the HttpException branch
-      // catches it first — the dedicated ThrottlerException branch is dead code.
       const body = catch_(new ThrottlerException());
       expect(body.statusCode).toBe(429);
       expect(body.errorCode).toBe(ErrorCode.RATE_LIMITED);
     });
 
-    it('maps MongoError code 11000 → 409 CONFLICT with field name', () => {
-      const err = new MongoError('duplicate key');
-      (err as any).code = 11000;
-      (err as any).keyValue = { email: 'test@test.com' };
-
+    it('maps PrismaClientKnownRequestError P2002 → 409 CONFLICT with field name', () => {
+      const err = makePrismaError('P2002', { target: ['email'] });
       const body = catch_(err);
       expect(body.statusCode).toBe(409);
       expect(body.errorCode).toBe(ErrorCode.CONFLICT);
       expect(body.message).toContain('email');
     });
 
-    it('maps MongoError code 11000 with no keyValue → uses "field" fallback', () => {
-      const err = new MongoError('duplicate key');
-      (err as any).code = 11000;
-      (err as any).keyValue = null;
-
+    it('maps PrismaClientKnownRequestError P2002 with no target → uses "field" fallback', () => {
+      const err = makePrismaError('P2002', {});
       const body = catch_(err);
       expect(body.message).toContain('field');
     });
 
-    it('maps non-11000 MongoError → 500 INTERNAL_ERROR', () => {
-      const err = new MongoError('connection refused');
-      (err as any).code = 13;
-
+    it('maps PrismaClientKnownRequestError P2025 → 404 NOT_FOUND', () => {
+      const err = makePrismaError('P2025');
       const body = catch_(err);
-      expect(body.statusCode).toBe(500);
-      expect(body.errorCode).toBe(ErrorCode.INTERNAL_ERROR);
-    });
-
-    it('maps MongooseError.ValidationError → 422 VALIDATION_ERROR', () => {
-      const err = new MongooseError.ValidationError();
-      err.errors = {
-        email: { message: 'email is required' } as any,
-        name: { message: 'name is too short' } as any,
-      };
-
-      const body = catch_(err);
-      expect(body.statusCode).toBe(422);
-      expect(body.errorCode).toBe(ErrorCode.VALIDATION_ERROR);
-      expect(body.message).toContain('email is required');
-      expect(body.message).toContain('name is too short');
+      expect(body.statusCode).toBe(404);
+      expect(body.errorCode).toBe(ErrorCode.NOT_FOUND);
     });
 
     it('maps unknown Error → 500 INTERNAL_ERROR', () => {
@@ -235,7 +217,7 @@ describe('GlobalExceptionFilter', () => {
 
     it('masks internal 5xx message as generic string', () => {
       const { host, res } = httpHost();
-      filter.catch(new Error('DB connection string: mongodb://secret'), host);
+      filter.catch(new Error('DB connection string: secret'), host);
       expect(res._body!.message).toBe('An internal server error occurred.');
     });
 
@@ -308,12 +290,8 @@ describe('GlobalExceptionFilter', () => {
       expect(err.extensions.code).toBe(ErrorCode.RATE_LIMITED);
     });
 
-    it('maps MongoError 11000 → 409 CONFLICT in GQL', () => {
-      const mongoErr = new MongoError('duplicate key');
-      (mongoErr as any).code = 11000;
-      (mongoErr as any).keyValue = { email: 'x@x.com' };
-
-      const err = catchGql(mongoErr);
+    it('maps PrismaClientKnownRequestError P2002 → 409 CONFLICT in GQL', () => {
+      const err = catchGql(makePrismaError('P2002', { target: ['email'] }));
       expect((err.extensions.http as any).status).toBe(409);
       expect(err.extensions.code).toBe(ErrorCode.CONFLICT);
     });

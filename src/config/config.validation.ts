@@ -11,7 +11,7 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
     CLIENT_ORIGIN: z.string().url(),
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 chars'),
 
-    MONGODB_URI: z.string().startsWith('mongodb'),
+    DATABASE_URL: z.string().startsWith('postgresql'),
 
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.coerce.number().default(6379),
