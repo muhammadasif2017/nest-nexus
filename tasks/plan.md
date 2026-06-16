@@ -7,7 +7,7 @@ Generated from coverage audit. Priority: security-critical first, then descendin
 - [x] **T1** — Unit tests for `totp-crypto.util.ts` (`encryptTotpSecret` / `decryptTotpSecret`)
 - [x] **T2** — Unit tests for `TwoFactorService` (setup, enable, disable, verify, backup codes)
 - [x] **T3** — Unit tests for `MagicLinkService` (send, verify, single-use invariant)
-- [ ] **T4** — Extend `auth.service.spec.ts`: `oauthLogin()` and `issueTokens()` branches
+- [x] **T4** — Extend `auth.service.spec.ts`: `oauthLogin()` and `issueTokens()` branches
 - [ ] **T5** — Extend `users.service.spec.ts`: cache hit/miss and event emission assertions
 - [ ] **T6** — Unit tests for `EmailProcessor` (job routing, dead-letter on final attempt)
 - [ ] **T7** — Unit tests for `AuthController` REST endpoints (2FA verify scope, session flows, OAuth callback, magic-link routes)

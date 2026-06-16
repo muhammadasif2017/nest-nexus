@@ -3,7 +3,7 @@ import { InjectMetric } from '@willsoto/nestjs-prometheus';
 import { Counter, Histogram } from 'prom-client';
 import { Observable, tap } from 'rxjs';
 import { Request, Response } from 'express';
-import { HTTP_REQUEST_DURATION, HTTP_REQUESTS_TOTAL } from './metrics.module';
+import { HTTP_REQUEST_DURATION, HTTP_REQUESTS_TOTAL } from './metrics.constants';
 
 @Injectable()
 export class MetricsInterceptor implements NestInterceptor {
