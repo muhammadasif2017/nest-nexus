@@ -15,7 +15,7 @@ import storageConfig from './config/storage.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
 // Infrastructure modules
-import { DatabaseModule } from './database/database.module';
+import { PrismaModule } from './prisma/prisma.module';
 import { CacheModule } from './cache/cache.module';
 import { LoggerModule } from './logger/logger.module';
 import { QueuesModule } from './queues/queues.module';
@@ -59,7 +59,7 @@ import { StorageModule } from './storage/storage.module';
     ]),
 
     // Infrastructure
-    DatabaseModule,
+    PrismaModule,
     CacheModule,
     LoggerModule,
     QueuesModule,

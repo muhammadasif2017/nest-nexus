@@ -1,4 +1,4 @@
-import { Exclude, Expose, Transform } from 'class-transformer';
+import { Exclude, Expose } from 'class-transformer';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -8,10 +8,8 @@ import { ApiProperty } from '@nestjs/swagger';
 @Exclude() // Start by EXCLUDING everything — this is safer than @Expose-ing everything
 export class UserOutput {
   @Field(() => ID)
-  @ApiProperty({ example: '64a1f2b3c4d5e6f7a8b9c0d1' })
+  @ApiProperty({ example: 'cuid2-or-uuid-string' })
   @Expose()
-  // Mongoose returns _id as ObjectId — transform to plain string for a consistent serializable ID.
-  @Transform(({ obj }) => obj.id)
   id!: string;
 
   @Field()

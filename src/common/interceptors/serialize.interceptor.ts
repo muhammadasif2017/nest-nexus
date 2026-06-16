@@ -16,7 +16,7 @@ export class SerializeInterceptor<T> implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle().pipe(
       map((data) => {
-        // plainToInstance converts a plain object (or Mongoose document) into
+        // plainToInstance converts a plain Prisma result object into
         // a DTO class instance, which class-transformer's @Expose/@Exclude then
         // operates on. Without this step, decorators on the DTO are ignored.
         return plainToInstance(this.dto, data, {
