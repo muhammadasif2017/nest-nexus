@@ -55,7 +55,7 @@ export class TwoFactorService {
     }
 
     const backupCodes = this.generateBackupCodes();
-    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, c));
+    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, c.replace(/-/g, '').toUpperCase()));
 
     await this.prisma.user.update({
       where: { id: userId },

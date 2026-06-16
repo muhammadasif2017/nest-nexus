@@ -4,7 +4,7 @@ Generated from coverage audit. Priority: security-critical first, then descendin
 
 ## Tasks
 
-- [ ] **T1** — Unit tests for `totp-crypto.util.ts` (`encryptTotpSecret` / `decryptTotpSecret`)
+- [x] **T1** — Unit tests for `totp-crypto.util.ts` (`encryptTotpSecret` / `decryptTotpSecret`)
 - [ ] **T2** — Unit tests for `TwoFactorService` (setup, enable, disable, verify, backup codes)
 - [ ] **T3** — Unit tests for `MagicLinkService` (send, verify, single-use invariant)
 - [ ] **T4** — Extend `auth.service.spec.ts`: `oauthLogin()` and `issueTokens()` branches
