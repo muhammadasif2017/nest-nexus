@@ -9,4 +9,5 @@ export default registerAs('app', () => ({
   clientOrigin: process.env.CLIENT_ORIGIN,
   alertsWebhookUrl: process.env.ALERTS_WEBHOOK_URL,
   totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY!,
+  emailWorkerConcurrency: parseInt(process.env.QUEUE_EMAIL_CONCURRENCY || '5', 10),
 }));

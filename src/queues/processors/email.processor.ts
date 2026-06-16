@@ -1,5 +1,6 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import {
   QUEUE_EMAIL,
@@ -16,14 +17,19 @@ import {
 } from '../dto/email.job.dto';
 import { DeadLetterService } from '../dead-letter.service';
 
-@Processor(QUEUE_EMAIL, {
-  concurrency: 5,
-})
-export class EmailProcessor extends WorkerHost {
+@Processor(QUEUE_EMAIL, { concurrency: 5 })
+export class EmailProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(EmailProcessor.name);
 
-  constructor(private readonly deadLetter: DeadLetterService) {
+  constructor(
+    private readonly deadLetter: DeadLetterService,
+    private readonly config: ConfigService,
+  ) {
     super();
+  }
+
+  onModuleInit(): void {
+    this.worker.concurrency = this.config.get<number>('app.emailWorkerConcurrency', 5);
   }
 
   async process(job: Job<EmailJobData>): Promise<void> {

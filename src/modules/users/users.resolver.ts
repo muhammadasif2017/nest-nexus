@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
-import { UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
+import { UseGuards, NotFoundException } from '@nestjs/common';
 import { UserOutput } from './dto/user.output';
 import { UpdateUserInput } from './dto/update-user.input';
 import { UsersService } from './users.service';
@@ -10,13 +10,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { Role } from '../../common/enums/role.enum';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
-import { SerializeInterceptor } from '../../common/interceptors/serialize.interceptor';
 
 // @UseGuards order matters: JwtAuthGuard runs first (authenticates),
 // then RolesGuard runs (authorizes). Think of it as a two-stage checkpoint.
 @Resolver(() => UserOutput)
 @UseGuards(JwtAuthGuard, RolesGuard)
-@UseInterceptors(new SerializeInterceptor(UserOutput)) // All responses go through UserOutput
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}
 
