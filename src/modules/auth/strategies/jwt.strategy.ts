@@ -22,6 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   // Deactivated users are blocked within 30s — acceptable since JWT itself is 15 min.
   private readonly activeCache = new Map<string, { ok: boolean; exp: number }>();
   private static readonly CACHE_TTL = 30_000;
+  private static readonly MAX_CACHE_SIZE = 10_000;
 
   constructor(
     private readonly config: ConfigService,
@@ -48,10 +49,20 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
 
     const ok = !!(user?.isActive);
-    this.activeCache.set(payload.sub, { ok, exp: now + JwtStrategy.CACHE_TTL });
+    this.setCacheEntry(payload.sub, { ok, exp: now + JwtStrategy.CACHE_TTL });
 
     if (!ok) throw new UnauthorizedException('User account is inactive or not found.');
     return payload;
+  }
+
+  private setCacheEntry(userId: string, entry: { ok: boolean; exp: number }): void {
+    this.activeCache.set(userId, entry);
+    if (this.activeCache.size > JwtStrategy.MAX_CACHE_SIZE) {
+      const now = Date.now();
+      for (const [key, val] of this.activeCache) {
+        if (val.exp <= now) this.activeCache.delete(key);
+      }
+    }
   }
 
   invalidateUserCache(userId: string): void {

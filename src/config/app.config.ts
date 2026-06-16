@@ -8,4 +8,5 @@ export default registerAs('app', () => ({
   sessionSecret: process.env.SESSION_SECRET,
   clientOrigin: process.env.CLIENT_ORIGIN,
   alertsWebhookUrl: process.env.ALERTS_WEBHOOK_URL,
+  totpEncryptionKey: process.env.TOTP_ENCRYPTION_KEY!,
 }));

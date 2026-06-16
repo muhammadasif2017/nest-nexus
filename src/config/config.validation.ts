@@ -23,6 +23,10 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
     JWT_EXPIRES_IN: z.string().default('15m'),
     JWT_REFRESH_SECRET: z.string().min(32),
     JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+
+    TOTP_ENCRYPTION_KEY: z
+      .string()
+      .regex(/^[0-9a-fA-F]{64}$/, 'TOTP_ENCRYPTION_KEY must be exactly 64 hex chars (32 bytes for AES-256)'),
   });
 
   const parsed = schema.safeParse(config);

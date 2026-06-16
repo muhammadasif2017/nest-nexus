@@ -64,7 +64,9 @@ export class AuthService {
       where: { email: dto.email.toLowerCase() },
     });
 
-    const dummyHash = '$2b$12$invalidhashpaddingtomatch.the.bcrypt.output.format';
+    // Must be a valid 60-char bcrypt hash so compare() runs the full KDF work factor,
+    // preventing timing attacks that reveal whether the email exists.
+    const dummyHash = '$2b$12$LlxSWCRB6GdBk9m4LPHIAeOELn5X7YV5l1Kp6Kgv4H9ZfXhVLMnaX';
     const passwordHash = user?.password ?? dummyHash;
     const isPasswordValid = await bcrypt.compare(dto.password, passwordHash);
 

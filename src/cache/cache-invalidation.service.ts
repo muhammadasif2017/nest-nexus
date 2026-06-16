@@ -1,4 +1,4 @@
-import { Injectable, Inject, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Inject, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -11,6 +11,7 @@ const CHANNEL = 'cache:invalidation';
 // A connection in subscribe mode can only receive messages — it cannot publish.
 @Injectable()
 export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(CacheInvalidationService.name);
   private readonly publisher: Redis;
   private readonly subscriber: Redis;
 
@@ -37,12 +38,12 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
         ({ keys } = JSON.parse(raw) as { keys: string[] });
       } catch {
         // Malformed message — log and skip rather than crashing the subscriber.
-        console.warn(`[CacheInvalidation] unparseable message on ${CHANNEL}:`, raw);
+        this.logger.warn(`Unparseable message on ${CHANNEL}: ${raw}`);
         return;
       }
       // Cross-instance: another pod invalidated these keys, so we do the same locally.
       Promise.all(keys.map((k) => this.cache.del(k))).catch((err) =>
-        console.warn('[CacheInvalidation] local key invalidation failed:', err),
+        this.logger.warn({ err }, 'Local key invalidation failed'),
       );
     });
   }

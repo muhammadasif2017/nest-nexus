@@ -8,11 +8,20 @@ import {
 import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
+import { encryptTotpSecret, decryptTotpSecret } from '../../common/crypto/totp-crypto.util';
 
 @Injectable()
 export class TwoFactorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly config: ConfigService,
+  ) {}
+
+  private get encryptionKey(): string {
+    return this.config.get<string>('app.totpEncryptionKey')!;
+  }
 
   async setup(userId: string): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
     const user = await this.prisma.user.findUnique({
@@ -26,7 +35,8 @@ export class TwoFactorService {
     const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
 
     // Store secret temporarily — 2FA is not active until enable() is called
-    await this.prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: secret } });
+    const encryptedSecret = encryptTotpSecret(secret, this.encryptionKey);
+    await this.prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: encryptedSecret } });
 
     return { secret, otpauthUrl, qrCodeDataUrl };
   }
@@ -39,7 +49,8 @@ export class TwoFactorService {
     if (!user?.twoFactorSecret) throw new BadRequestException('Run 2FA setup first.');
     if (user.isTwoFactorEnabled) throw new ConflictException('2FA is already enabled.');
 
-    if (!authenticator.verify({ token: totpCode, secret: user.twoFactorSecret })) {
+    const secret = decryptTotpSecret(user.twoFactorSecret, this.encryptionKey);
+    if (!authenticator.verify({ token: totpCode, secret })) {
       throw new UnauthorizedException('Invalid TOTP code.');
     }
 
@@ -78,7 +89,8 @@ export class TwoFactorService {
     });
     if (!user?.isTwoFactorEnabled || !user.twoFactorSecret) return false;
 
-    if (authenticator.verify({ token: code, secret: user.twoFactorSecret })) return true;
+    const secret = decryptTotpSecret(user.twoFactorSecret, this.encryptionKey);
+    if (authenticator.verify({ token: code, secret })) return true;
 
     // Try backup codes — strip formatting before hashing
     const hash = this.hashCode(userId, code.replace(/-/g, '').toUpperCase());

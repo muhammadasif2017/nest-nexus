@@ -16,6 +16,7 @@ interface CachedSessionUser {
 export class SessionGuard implements CanActivate {
   // 30s TTL — same rationale as JwtStrategy: session users deactivated within one cache window.
   private static readonly CACHE_TTL = 30_000;
+  private static readonly MAX_CACHE_SIZE = 10_000;
   private readonly userCache = new Map<string, CachedSessionUser>();
 
   constructor(private readonly prisma: PrismaService) {}
@@ -45,11 +46,21 @@ export class SessionGuard implements CanActivate {
       throw new UnauthorizedException('Session user not found or inactive.');
     }
 
-    this.userCache.set(userId, { ...user, exp: now + SessionGuard.CACHE_TTL });
+    this.setCacheEntry(userId, { ...user, exp: now + SessionGuard.CACHE_TTL });
 
     // Populate req.user so @CurrentUser() works on session-protected routes
     (request as any).user = user;
     return true;
+  }
+
+  private setCacheEntry(userId: string, entry: CachedSessionUser): void {
+    this.userCache.set(userId, entry);
+    if (this.userCache.size > SessionGuard.MAX_CACHE_SIZE) {
+      const now = Date.now();
+      for (const [key, val] of this.userCache) {
+        if (val.exp <= now) this.userCache.delete(key);
+      }
+    }
   }
 
   @OnEvent('user.updated')
