@@ -1,4 +1,4 @@
-import { Logger, OnModuleDestroy } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -12,9 +12,7 @@ import {
 import { OnEvent } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { createAdapter } from '@socket.io/redis-adapter';
 import { Server, Socket } from 'socket.io';
-import Redis from 'ioredis';
 import { JwtPayload } from '../auth/strategies/jwt.strategy';
 
 // Extend Socket to carry the authenticated user after connection validation
@@ -38,33 +36,18 @@ interface AuthenticatedSocket extends Socket {
   namespace: '/ws',
 })
 export class NotificationGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer() private server!: Server;
   private readonly logger = new Logger(NotificationGateway.name);
-  private pubClient!: Redis;
-  private subClient!: Redis;
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}
 
-  afterInit(server: Server): void {
-    const opts = {
-      host: this.config.get<string>('redis.host'),
-      port: this.config.get<number>('redis.port'),
-      password: this.config.get<string | undefined>('redis.password'),
-    };
-    this.pubClient = new Redis(opts);
-    this.subClient = this.pubClient.duplicate();
-    // Redis adapter enables cross-instance Socket.IO fan-out
-    server.adapter(createAdapter(this.pubClient, this.subClient));
-    this.logger.log('WebSocket gateway initialized with Redis adapter');
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    await Promise.all([this.pubClient?.quit(), this.subClient?.quit()]);
+  afterInit(): void {
+    this.logger.log('WebSocket gateway initialized');
   }
 
   async handleConnection(client: AuthenticatedSocket): Promise<void> {
