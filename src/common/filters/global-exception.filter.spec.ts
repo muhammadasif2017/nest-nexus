@@ -9,10 +9,16 @@ import {
   ConflictException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ThrottlerException } from '@nestjs/throttler';
 import { GraphQLError } from 'graphql';
 import { Prisma } from '@prisma/client';
 import { GlobalExceptionFilter, ErrorCode } from './global-exception.filter';
+
+const makeConfigMock = (nodeEnv = 'test') =>
+  ({ get: jest.fn().mockReturnValue(nodeEnv) }) as unknown as ConfigService;
+
+const makeFilter = (nodeEnv = 'test') => new GlobalExceptionFilter(makeConfigMock(nodeEnv));
 
 // ── Mock helpers ─────────────────────────────────────────────────────────────
 
@@ -70,7 +76,7 @@ afterAll(() => jest.restoreAllMocks());
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
 
-  beforeEach(() => { filter = new GlobalExceptionFilter(); });
+  beforeEach(() => { filter = makeFilter(); });
 
   // ── Routing ───────────────────────────────────────────────────────────────
 
@@ -228,27 +234,21 @@ describe('GlobalExceptionFilter', () => {
     });
 
     describe('dev vs prod — stack trace', () => {
-      const originalEnv = process.env.NODE_ENV;
-      afterEach(() => { process.env.NODE_ENV = originalEnv; });
-
       it('omits stack in production', () => {
-        process.env.NODE_ENV = 'production';
         const { host, res } = httpHost();
-        filter.catch(new Error('crash'), host);
+        makeFilter('production').catch(new Error('crash'), host);
         expect(res._body!.stack).toBeUndefined();
       });
 
       it('includes stack in development for 5xx', () => {
-        process.env.NODE_ENV = 'development';
         const { host, res } = httpHost();
-        filter.catch(new Error('crash'), host);
+        makeFilter('development').catch(new Error('crash'), host);
         expect(res._body!.stack).toBeDefined();
       });
 
       it('omits stack in development for 4xx', () => {
-        process.env.NODE_ENV = 'development';
         const { host, res } = httpHost();
-        filter.catch(new NotFoundException(), host);
+        makeFilter('development').catch(new NotFoundException(), host);
         expect(res._body!.stack).toBeUndefined();
       });
     });
@@ -297,30 +297,23 @@ describe('GlobalExceptionFilter', () => {
     });
 
     describe('dev vs prod — originalMessage', () => {
-      const originalEnv = process.env.NODE_ENV;
-      afterEach(() => { process.env.NODE_ENV = originalEnv; });
-
       it('includes originalMessage in development for 5xx', () => {
-        process.env.NODE_ENV = 'development';
-        const err = catchGql(new Error('real crash message'));
+        const err = makeFilter('development').catch(new Error('real crash message'), gqlHost()) as GraphQLError;
         expect((err.extensions as any).originalMessage).toBe('real crash message');
       });
 
       it('omits originalMessage in production', () => {
-        process.env.NODE_ENV = 'production';
-        const err = catchGql(new Error('real crash message'));
+        const err = makeFilter('production').catch(new Error('real crash message'), gqlHost()) as GraphQLError;
         expect((err.extensions as any).originalMessage).toBeUndefined();
       });
 
       it('includes timestamp in development', () => {
-        process.env.NODE_ENV = 'development';
-        const err = catchGql(new Error('crash'));
+        const err = makeFilter('development').catch(new Error('crash'), gqlHost()) as GraphQLError;
         expect((err.extensions as any).timestamp).toBeDefined();
       });
 
       it('omits timestamp in production', () => {
-        process.env.NODE_ENV = 'production';
-        const err = catchGql(new Error('crash'));
+        const err = makeFilter('production').catch(new Error('crash'), gqlHost()) as GraphQLError;
         expect((err.extensions as any).timestamp).toBeUndefined();
       });
     });
