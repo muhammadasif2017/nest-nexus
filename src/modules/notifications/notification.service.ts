@@ -37,16 +37,18 @@ export class NotificationService {
   sendToUser(userId: string, type: string, data: unknown): void {
     const clients = this.sseClients.get(userId);
     if (!clients?.size) return;
-
-    const payload: NotificationPayload = { type, data, timestamp: new Date().toISOString() };
-    const event: MessageEvent = { data: payload, type };
+    const event = this.buildEvent(type, data);
     clients.forEach((s) => s.next(event));
   }
 
   broadcast(type: string, data: unknown): void {
-    const payload: NotificationPayload = { type, data, timestamp: new Date().toISOString() };
-    const event: MessageEvent = { data: payload, type };
+    const event = this.buildEvent(type, data);
     this.sseClients.forEach((clients) => clients.forEach((s) => s.next(event)));
+  }
+
+  private buildEvent(type: string, data: unknown): MessageEvent {
+    const payload: NotificationPayload = { type, data, timestamp: new Date().toISOString() };
+    return { data: payload, type };
   }
 
   // ── Domain event listeners ──────────────────────────────────────────────────

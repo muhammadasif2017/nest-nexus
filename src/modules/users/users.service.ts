@@ -48,8 +48,8 @@ export class UsersService {
   async update(id: string, dto: UpdateUserInput): Promise<UserOutput> {
     try {
       const updated = await this.prisma.user.update({ where: { id }, data: dto });
-      this.eventEmitter.emit('user.updated', { userId: id });
-      return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
+    this.eventEmitter.emit('user.updated', { userId: id });
+    return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
     } catch (e) {
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
         throw new NotFoundException(`User with id ${id} not found.`);
@@ -59,15 +59,15 @@ export class UsersService {
   }
 
   async deactivate(id: string): Promise<UserOutput> {
-    try {
-      const updated = await this.prisma.user.update({ where: { id }, data: { isActive: false } });
-      this.eventEmitter.emit('user.deactivated', { userId: id });
-      return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException(`User with id ${id} not found.`);
-      }
-      throw e;
+    const updated = await this.prisma.user.update({ where: { id }, data: { isActive: false } }).catch((e) => this.rethrowNotFound(e, id));
+    this.eventEmitter.emit('user.deactivated', { userId: id });
+    return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
+  }
+
+  private rethrowNotFound(e: unknown, id: string): never {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
+      throw new NotFoundException(`User with id ${id} not found.`);
     }
+    throw e;
   }
 }

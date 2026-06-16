@@ -20,23 +20,22 @@ export class MetricsInterceptor implements NestInterceptor {
     const method = req.method;
     const endTimer = this.histogram.startTimer();
 
+    // Use matched route pattern (/users/:id) not the actual URL (/users/abc123)
+    // to keep cardinality bounded — one label value per route, not per request.
+    const route = (req.route?.path as string | undefined) ?? req.path;
+
+    const record = (statusCode: string) => {
+      endTimer({ method, route, status_code: statusCode });
+      this.counter.inc({ method, route, status_code: statusCode });
+    };
+
     return next.handle().pipe(
       tap({
         next: () => {
           const res = context.switchToHttp().getResponse<Response>();
-          // Use the matched route pattern (/users/:id) not the actual URL (/users/abc123)
-          // to keep cardinality bounded — one label value per route, not per request.
-          const route = (req.route?.path as string | undefined) ?? req.path;
-          const statusCode = String(res.statusCode);
-          endTimer({ method, route, status_code: statusCode });
-          this.counter.inc({ method, route, status_code: statusCode });
+          record(String(res.statusCode));
         },
-        error: (err: { status?: number }) => {
-          const route = (req.route?.path as string | undefined) ?? req.path;
-          const statusCode = String(err?.status ?? 500);
-          endTimer({ method, route, status_code: statusCode });
-          this.counter.inc({ method, route, status_code: statusCode });
-        },
+        error: (err: { status?: number }) => record(String(err?.status ?? 500)),
       }),
     );
   }

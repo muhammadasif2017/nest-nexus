@@ -109,15 +109,15 @@ export class NotificationGateway
   // ── Outbound helpers (called by other services or event listeners) ──────────
 
   sendToUser(userId: string, event: string, data: unknown): void {
-    this.server.to(`user:${userId}`).emit(event, {
-      type: event,
-      data,
-      timestamp: new Date().toISOString(),
-    });
+    this.server.to(`user:${userId}`).emit(event, this.buildPayload(event, data));
   }
 
   broadcast(event: string, data: unknown): void {
-    this.server.emit(event, { type: event, data, timestamp: new Date().toISOString() });
+    this.server.emit(event, this.buildPayload(event, data));
+  }
+
+  private buildPayload(type: string, data: unknown) {
+    return { type, data, timestamp: new Date().toISOString() };
   }
 
   // ── Inbound message handlers ────────────────────────────────────────────────
@@ -159,10 +159,6 @@ export class NotificationGateway
   @OnEvent('user.created')
   onUserCreated(payload: { userId: string }): void {
     // Admins or dashboard clients can subscribe to a global channel
-    this.server.to('admin').emit('user:created', {
-      type: 'user:created',
-      data: payload,
-      timestamp: new Date().toISOString(),
-    });
+    this.server.to('admin').emit('user:created', this.buildPayload('user:created', payload));
   }
 }
