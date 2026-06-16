@@ -72,14 +72,7 @@ export class AuthService {
       .catch(() => {});
 
     // 2FA is enabled — issue a short-lived pending token instead of a full session
-    if (user.isTwoFactorEnabled) {
-      const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      return {
-        auth: { accessToken: pendingToken, isTwoFactorPending: true, accessTokenExpiresAt: expiresAt } as any,
-        refreshToken: '',
-      };
-    }
+    if (user.isTwoFactorEnabled) return this.buildPendingTwoFactorResponse(user);
 
     return this.buildAuthResponse(user);
   }
@@ -150,14 +143,7 @@ export class AuthService {
       throw new ForbiddenException('Your account has been deactivated. Please contact support.');
     }
 
-    if (user.isTwoFactorEnabled) {
-      const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
-      return {
-        auth: { accessToken: pendingToken, isTwoFactorPending: true, accessTokenExpiresAt: expiresAt } as any,
-        refreshToken: '',
-      };
-    }
+    if (user.isTwoFactorEnabled) return this.buildPendingTwoFactorResponse(user);
 
     return this.buildAuthResponse(user);
   }
@@ -174,6 +160,15 @@ export class AuthService {
     const expiresIn = this.config.get<string>('jwt.expiresIn') ?? '15m';
     const expiresAt = this.parseExpiresIn(expiresIn);
     return { auth: { accessToken, accessTokenExpiresAt: expiresAt } as any, refreshToken };
+  }
+
+  private buildPendingTwoFactorResponse(user: User): { auth: AuthOutput; refreshToken: string } {
+    const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    return {
+      auth: { accessToken: pendingToken, isTwoFactorPending: true, accessTokenExpiresAt: expiresAt } as any,
+      refreshToken: '',
+    };
   }
 
   private async buildAuthResponse(

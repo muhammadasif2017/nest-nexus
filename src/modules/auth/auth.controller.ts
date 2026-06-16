@@ -92,13 +92,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const rawToken = req.cookies?.['refresh_token'];
-    if (!rawToken) {
-      return res.status(HttpStatus.UNAUTHORIZED).json({
-        statusCode: 401,
-        errorCode: 'UNAUTHENTICATED',
-        message: 'No refresh token found.',
-      });
-    }
+    if (!rawToken) throw new UnauthorizedException('No refresh token found.');
     const { auth, refreshToken } = await this.authService.refresh(rawToken);
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
@@ -199,11 +193,7 @@ export class AuthController {
   @UseGuards(AuthGuard('google'))
   @ApiOperation({ summary: 'Google OAuth2 callback' })
   async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
-    const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
-    const clientOrigin = this.config.get<string>('app.clientOrigin');
-        // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
-    res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);
+    return this.handleOAuthCallback(req, res);
   }
 
   // ── OAuth2 — GitHub ──────────────────────────────────────────────────────────
@@ -219,10 +209,14 @@ export class AuthController {
   @UseGuards(AuthGuard('github'))
   @ApiOperation({ summary: 'GitHub OAuth2 callback' })
   async githubCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.handleOAuthCallback(req, res);
+  }
+
+  // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
+  private async handleOAuthCallback(req: Request, res: Response): Promise<void> {
     const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     const clientOrigin = this.config.get<string>('app.clientOrigin');
-        // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
     res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);
   }
 

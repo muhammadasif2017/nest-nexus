@@ -72,10 +72,7 @@ export class TokenService {
     });
 
     const incomingHash = this.hashRefreshToken(rawToken);
-    let matchedToken: RefreshToken | null = null;
-    for (const candidate of familyTokens) {
-      if (candidate.tokenHash === incomingHash) { matchedToken = candidate; break; }
-    }
+    const matchedToken = familyTokens.find((t) => t.tokenHash === incomingHash) ?? null;
 
     if (!matchedToken) {
       if (familyTokens.length > 0) {

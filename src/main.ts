@@ -1,5 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import { VersioningType, ClassSerializerInterceptor, ValidationPipe, RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -11,7 +11,6 @@ import { Queue } from 'bullmq';
 import { QUEUE_EMAIL } from './queues/queues.constants';
 
 import helmet from 'helmet';
-import { RequestMethod } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
 import compression from 'compression';
@@ -31,6 +30,7 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const PORT = config.get<number>('app.port', 3000);
   const NODE_ENV = config.get<string>('app.nodeEnv');
+  const isDev = NODE_ENV !== 'production';
   const SESSION_SECRET = config.get<string>('app.sessionSecret');
   const DATABASE_URL = config.get<string>('database.url');
   const CLIENT_ORIGIN = config.get<string>('app.clientOrigin');
@@ -53,8 +53,8 @@ async function bootstrap() {
   // only in dev so the GraphQL Playground can load its inline scripts.
   app.use(
     helmet({
-      contentSecurityPolicy: NODE_ENV === 'production' ? undefined : false,
-      crossOriginEmbedderPolicy: NODE_ENV === 'production',
+      contentSecurityPolicy: isDev ? false : undefined,
+      crossOriginEmbedderPolicy: !isDev,
     }),
   );
 
@@ -83,7 +83,7 @@ async function bootstrap() {
       store: new PgSession({ pool: pgPool, createTableIfMissing: true }),
       cookie: {
         httpOnly: true,
-        secure: NODE_ENV === 'production',
+        secure: !isDev,
         sameSite: 'strict',
         maxAge: 1000 * 60 * 60 * 24, // 24 hours
       },
@@ -103,7 +103,7 @@ async function bootstrap() {
     cookieOptions: {
       httpOnly: false, // Client JS must read this to send as header
       sameSite: 'strict',
-      secure: NODE_ENV === 'production',
+      secure: !isDev,
     },
     getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
   });
@@ -137,7 +137,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
   // ── Swagger (non-production only) ─────────────────────────────────────────
-  if (NODE_ENV !== 'production') {
+  if (isDev) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('nest-nexus API')
       .setDescription('REST endpoints for nest-nexus. GraphQL lives at /graphql.')
@@ -173,7 +173,7 @@ async function bootstrap() {
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
   console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
-  if (NODE_ENV !== 'production') {
+  if (isDev) {
     console.log(`📖 Swagger docs at http://localhost:${PORT}/api/docs`);
     console.log(`🐂 Bull Board at http://localhost:${PORT}/api/queues`);
   }
