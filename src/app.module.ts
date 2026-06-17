@@ -30,6 +30,7 @@ import { MetricsModule } from './metrics/metrics.module';
 // Feature modules (one per domain)
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { SessionAuthModule } from './modules/session-auth/session-auth.module';
 import { NotificationsModule } from './modules/notifications/notification.module';
 import { StorageModule } from './storage/storage.module';
 import { GraphQLConfigModule } from './graphql/graphql.module';
@@ -75,6 +76,7 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
 
     // Feature Modules
     AuthModule,
+    SessionAuthModule,
     UsersModule,
     NotificationsModule,
     StorageModule,

@@ -25,9 +25,8 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { OAuthProfile } from './strategies/google.strategy';
 
-// JWT and session flows share the same base URL intentionally —
-// clients choose their auth mechanism by which endpoint they call,
-// not by a different URL prefix. This keeps the URL surface minimal.
+// Session-based auth (cookie login, no JWT) lives in SessionAuthModule —
+// see src/modules/session-auth. This controller is JWT-only.
 @ApiTags('auth')
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
@@ -111,62 +110,6 @@ export class AuthController {
     await this.authService.logout(user.sub);
     res.clearCookie('refresh_token', { path: '/api/v1/auth' });
     // 204 No Content — nothing to return after logout
-  }
-
-  @Post('session/login')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ strict: { limit: 5, ttl: 600_000 } })
-  @ApiOperation({ summary: 'Session-based login', description: 'For traditional web clients. Sets HttpOnly session cookie — no tokens returned.' })
-  @ApiBody({ type: LoginInput })
-  @ApiResponse({ status: 200, description: 'Session created.' })
-  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
-  @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
-  async sessionLogin(
-    @Body() dto: LoginInput,
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const { auth } = await this.authService.login(dto, req.ip);
-
-    if ((auth as any).isTwoFactorPending) {
-      return res.status(HttpStatus.UNAUTHORIZED).json({
-        statusCode: 401,
-        errorCode: 'TWO_FACTOR_REQUIRED',
-        message: 'Two-factor authentication required. Use the JWT flow to complete 2FA.',
-      });
-    }
-
-    // Regenerate the session ID after login — this prevents session fixation attacks,
-    // where an attacker pre-sets a known session ID and waits for the victim to log in.
-    await new Promise<void>((resolve, reject) => {
-      req.session.regenerate((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Store the user payload in the session. The session is persisted to PostgreSQL
-    // via connect-pg-simple (configured in main.ts).
-    (req.session as any).user = auth.user;
-    (req.session as any).userId = auth.user!.id;
-
-    // We don't return tokens here — the session cookie is the auth mechanism.
-    return { message: 'Logged in successfully.', user: auth.user };
-  }
-
-  @Post('session/logout')
-  @Public() // Session guard handles auth for this endpoint — no JWT required
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Session-based logout', description: 'Destroys the server-side session.' })
-  @ApiResponse({ status: 204, description: 'Session destroyed.' })
-  async sessionLogout(@Req() req: Request) {
-    await new Promise<void>((resolve, reject) => {
-      req.session.destroy((err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
   }
 
   @Get('me')

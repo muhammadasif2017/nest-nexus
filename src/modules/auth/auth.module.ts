@@ -11,7 +11,6 @@ import { TwoFactorService } from './two-factor.service';
 import { MagicLinkService } from './magic-link.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { SessionSerializer } from './strategies/session.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GithubStrategy } from './strategies/github.strategy';
 import { QueuesModule } from '../../queues/queues.module';
@@ -37,7 +36,6 @@ import { QueuesModule } from '../../queues/queues.module';
     MagicLinkService,
     JwtStrategy,
     JwtRefreshStrategy,
-    SessionSerializer,
     GoogleStrategy,
     GithubStrategy,
   ],
