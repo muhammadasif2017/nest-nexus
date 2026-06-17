@@ -4,9 +4,9 @@ import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
-import { PrismaService } from '../../prisma/prisma.service';
-import { QUEUE_EMAIL, EmailJobName } from '../../queues/queues.constants';
-import { MagicLinkEmailData } from '../../queues/dto/email.job.dto';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { QUEUE_EMAIL, EmailJobName } from '../../../queues/queues.constants';
+import { MagicLinkEmailData } from '../../../queues/dto/email.job.dto';
 
 const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 

@@ -1,42 +1,31 @@
 import {
-  Controller, Post, Body, Req, Res, HttpCode, HttpStatus,
-  UseGuards, Get, Query, UnauthorizedException,
+  Controller, Post, Delete, Param, Body, Req, Res, HttpCode, HttpStatus,
+  Get, UnauthorizedException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
 import {
-  ApiTags, ApiOperation, ApiResponse, ApiBearerAuth,
-  ApiCookieAuth, ApiBody, ApiQuery,
+  ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth, ApiBody,
 } from '@nestjs/swagger';
-import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
-import { TwoFactorService } from './two-factor.service';
-import { MagicLinkService } from './magic-link.service';
 import { LoginInput } from './dto/login.input';
 import { RegisterInput } from './dto/register.input';
 import { AuthOutput } from './dto/auth.output';
-import { TwoFactorCodeInput, MagicLinkSendInput, MagicLinkVerifyInput } from './dto/two-factor.input';
-import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { DeviceSessionOutput } from './dto/device-session.output';
 import { Public } from '../../common/decorators/public.decorator';
-import { AllowPending2FA } from '../../common/decorators/allow-pending-2fa.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './strategies/jwt.strategy';
-import { OAuthProfile } from './strategies/google.strategy';
 
-// Session-based auth (cookie login, no JWT) lives in SessionAuthModule —
-// see src/modules/session-auth. This controller is JWT-only.
+// OAuth (oauth/), 2FA (two-factor/), magic links (magic-link/) and session-based
+// auth (../session-auth) each have their own controller — see ADR-015. This
+// controller covers only the core JWT credential flow + device-session management.
 @ApiTags('auth')
 @Controller('auth')
-@UseGuards(JwtAuthGuard)
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly tokenService: TokenService,
-    private readonly twoFactorService: TwoFactorService,
-    private readonly magicLinkService: MagicLinkService,
-    private readonly config: ConfigService,
   ) {}
 
   @Post('register')
@@ -121,129 +110,27 @@ export class AuthController {
     return user;
   }
 
-  // ── OAuth2 — Google ──────────────────────────────────────────────────────────
-
-  @Get('google')
-  @Public()
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Initiate Google OAuth2 flow' })
-  googleAuth() {
-    // Passport redirects to Google automatically — no body needed
-  }
-
-  @Get('google/callback')
-  @Public()
-  @UseGuards(AuthGuard('google'))
-  @ApiOperation({ summary: 'Google OAuth2 callback' })
-  async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
-    return this.handleOAuthCallback(req, res);
-  }
-
-  // ── OAuth2 — GitHub ──────────────────────────────────────────────────────────
-
-  @Get('github')
-  @Public()
-  @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'Initiate GitHub OAuth2 flow' })
-  githubAuth() {}
-
-  @Get('github/callback')
-  @Public()
-  @UseGuards(AuthGuard('github'))
-  @ApiOperation({ summary: 'GitHub OAuth2 callback' })
-  async githubCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
-    return this.handleOAuthCallback(req, res);
-  }
-
-  // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
-  private async handleOAuthCallback(req: Request, res: Response): Promise<void> {
-    const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
-    const clientOrigin = this.config.get<string>('app.clientOrigin');
-    res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);
-  }
-
-  // ── 2FA TOTP ─────────────────────────────────────────────────────────────────
-
-  @Post('2fa/setup')
+  @Get('sessions')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Generate TOTP secret + QR code', description: 'Returns secret and data URL for a QR code to scan with an authenticator app. Call enable to activate.' })
-  @ApiResponse({ status: 200, description: 'Setup data returned.' })
-  async setup2fa(@CurrentUser() user: JwtPayload) {
-    return this.twoFactorService.setup(user.sub);
+  @ApiOperation({ summary: 'List active device sessions', description: 'Returns one entry per device with an active (non-expired, non-revoked) refresh token.' })
+  @ApiResponse({ status: 200, description: 'Active device sessions.', type: [DeviceSessionOutput] })
+  async listSessions(
+    @CurrentUser() user: JwtPayload,
+    @Req() req: Request,
+  ): Promise<DeviceSessionOutput[]> {
+    const currentDeviceId = await this.tokenService.getCurrentDeviceId(user.sub, req.cookies?.['refresh_token']);
+    return this.tokenService.listDeviceSessions(user.sub, currentDeviceId);
   }
 
-  @Post('2fa/enable')
-  @ApiBearerAuth('access-token')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Enable 2FA (verify TOTP code)', description: 'Returns 10 single-use backup codes. Save them — they are shown only once.' })
-  @ApiBody({ type: TwoFactorCodeInput })
-  @ApiResponse({ status: 200, description: 'Backup codes returned.' })
-  @ApiResponse({ status: 401, description: 'Invalid TOTP code.' })
-  async enable2fa(@CurrentUser() user: JwtPayload, @Body() dto: TwoFactorCodeInput) {
-    const backupCodes = await this.twoFactorService.enable(user.sub, dto.code);
-    return { backupCodes };
-  }
-
-  @Post('2fa/disable')
+  @Delete('sessions/:deviceId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Disable 2FA', description: 'Requires a valid TOTP code to prevent accidental or unauthorized disabling.' })
-  @ApiBody({ type: TwoFactorCodeInput })
-  @ApiResponse({ status: 204, description: '2FA disabled.' })
-  @ApiResponse({ status: 401, description: 'Invalid TOTP code.' })
-  async disable2fa(@CurrentUser() user: JwtPayload, @Body() dto: TwoFactorCodeInput) {
-    await this.twoFactorService.disable(user.sub, dto.code);
-  }
-
-  @Post('2fa/verify')
-  @AllowPending2FA()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Complete 2FA login', description: 'Exchanges a pending-2FA access token + TOTP code for a full access token. Refresh token set as HttpOnly cookie.' })
-  @ApiBearerAuth('access-token')
-  @ApiBody({ type: TwoFactorCodeInput })
-  @ApiResponse({ status: 200, description: 'Full access token issued.', type: AuthOutput })
-  @ApiResponse({ status: 401, description: 'Invalid TOTP or backup code.' })
-  async verify2fa(
+  @ApiOperation({ summary: 'Revoke a device session', description: 'Revokes all refresh tokens for the given deviceId, signing that device out.' })
+  @ApiResponse({ status: 204, description: 'Device session revoked.' })
+  async revokeSession(
     @CurrentUser() user: JwtPayload,
-    @Body() dto: TwoFactorCodeInput,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthOutput> {
-    const isValid = await this.twoFactorService.verify(user.sub, dto.code);
-    if (!isValid) throw new UnauthorizedException('Invalid 2FA code.');
-
-    const { auth, refreshToken } = await this.authService.issueTokens(user.sub);
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
-    return auth;
-  }
-
-  // ── Magic Links ──────────────────────────────────────────────────────────────
-
-  @Post('magic-link/send')
-  @Public()
-  @HttpCode(HttpStatus.OK)
-  @Throttle({ strict: { limit: 3, ttl: 600_000 } })
-  @ApiOperation({ summary: 'Send magic login link', description: 'Emails a one-time login link (15 min TTL). Always returns 200 — does not reveal whether the email exists.' })
-  @ApiBody({ type: MagicLinkSendInput })
-  @ApiResponse({ status: 200, description: 'Email sent (if account exists).' })
-  async sendMagicLink(@Body() dto: MagicLinkSendInput) {
-    await this.magicLinkService.send(dto.email);
-    return { message: 'If an account with this email exists, a login link has been sent.' };
-  }
-
-  @Get('magic-link/verify')
-  @Public()
-  @ApiOperation({ summary: 'Verify magic link token', description: 'Single-use. Issues a full session on success. Refresh token set as HttpOnly cookie.' })
-  @ApiQuery({ name: 'token', description: 'Token from the magic link URL' })
-  @ApiResponse({ status: 200, description: 'Login successful.', type: AuthOutput })
-  @ApiResponse({ status: 401, description: 'Invalid or expired token.' })
-  async verifyMagicLink(
-    @Query() dto: MagicLinkVerifyInput,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<AuthOutput> {
-    const userId = await this.magicLinkService.verify(dto.token);
-    const { auth, refreshToken } = await this.authService.issueTokens(userId);
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
-    return auth;
+    @Param('deviceId') deviceId: string,
+  ): Promise<void> {
+    await this.tokenService.revokeDeviceSession(user.sub, deviceId);
   }
 }

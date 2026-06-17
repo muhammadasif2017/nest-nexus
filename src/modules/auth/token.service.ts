@@ -193,6 +193,16 @@ export class TokenService {
     await this.prisma.refreshToken.deleteMany({ where: { userId, deviceId } });
   }
 
+  // Identifies which device session is making the current request, so listDeviceSessions
+  // can flag it with isCurrent. Scoped to userId so a token can't be used to probe other users' devices.
+  async getCurrentDeviceId(userId: string, rawRefreshToken?: string): Promise<string | undefined> {
+    if (!rawRefreshToken) return undefined;
+    const token = await this.prisma.refreshToken.findFirst({
+      where: { userId, tokenHash: this.hashRefreshToken(rawRefreshToken) },
+    });
+    return token?.deviceId ?? undefined;
+  }
+
   async generateRefreshToken(
     userId: string,
     options?: {
