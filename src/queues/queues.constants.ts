@@ -2,6 +2,8 @@ export const QUEUE_EMAIL = 'email' as const;
 
 export const DEFAULT_JOB_ATTEMPTS = 3;
 
+export const EMAIL_WORKER_CONCURRENCY = 5;
+
 export const EmailJobName = {
   WELCOME: 'welcome',
   PASSWORD_RESET: 'password-reset',

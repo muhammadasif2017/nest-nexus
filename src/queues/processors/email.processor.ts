@@ -6,6 +6,7 @@ import {
   QUEUE_EMAIL,
   EmailJobName,
   DEFAULT_JOB_ATTEMPTS,
+  EMAIL_WORKER_CONCURRENCY,
 } from '../queues.constants';
 import {
   EmailJobData,
@@ -17,7 +18,7 @@ import {
 } from '../dto/email.job.dto';
 import { DeadLetterService } from '../dead-letter.service';
 
-@Processor(QUEUE_EMAIL, { concurrency: 5 })
+@Processor(QUEUE_EMAIL, { concurrency: EMAIL_WORKER_CONCURRENCY })
 export class EmailProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(EmailProcessor.name);
 
@@ -29,7 +30,10 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
   }
 
   onModuleInit(): void {
-    this.worker.concurrency = this.config.get<number>('app.emailWorkerConcurrency', 5);
+    this.worker.concurrency = this.config.get<number>(
+      'app.emailWorkerConcurrency',
+      EMAIL_WORKER_CONCURRENCY,
+    );
   }
 
   async process(job: Job<EmailJobData>): Promise<void> {

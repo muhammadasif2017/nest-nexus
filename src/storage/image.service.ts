@@ -31,16 +31,11 @@ export class ImageService {
 
   // Resize to square avatar, convert to WebP for smaller payloads
   async processAvatar(buffer: Buffer): Promise<{ buffer: Buffer; mimeType: string }> {
-    this.validateImageType(buffer);
-    try {
-      const processed = await sharp(buffer)
+    return this.processWithSharp(buffer, (image) =>
+      image
         .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: 'cover', position: 'centre' })
-        .webp({ quality: THUMBNAIL_QUALITY })
-        .toBuffer();
-      return { buffer: processed, mimeType: 'image/webp' };
-    } catch {
-      throw new BadRequestException('Invalid or corrupted image file.');
-    }
+        .webp({ quality: THUMBNAIL_QUALITY }),
+    );
   }
 
   // Generic resize — preserves aspect ratio, outputs WebP
@@ -50,12 +45,18 @@ export class ImageService {
     height?: number,
     quality = THUMBNAIL_QUALITY,
   ): Promise<{ buffer: Buffer; mimeType: string }> {
+    return this.processWithSharp(buffer, (image) =>
+      image.resize(width, height, { fit: 'inside', withoutEnlargement: true }).webp({ quality }),
+    );
+  }
+
+  private async processWithSharp(
+    buffer: Buffer,
+    transform: (image: sharp.Sharp) => sharp.Sharp,
+  ): Promise<{ buffer: Buffer; mimeType: string }> {
     this.validateImageType(buffer);
     try {
-      const processed = await sharp(buffer)
-        .resize(width, height, { fit: 'inside', withoutEnlargement: true })
-        .webp({ quality })
-        .toBuffer();
+      const processed = await transform(sharp(buffer)).toBuffer();
       return { buffer: processed, mimeType: 'image/webp' };
     } catch {
       throw new BadRequestException('Invalid or corrupted image file.');

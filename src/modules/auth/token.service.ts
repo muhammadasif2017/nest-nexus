@@ -3,6 +3,8 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { RefreshToken } from '@prisma/client';
 import crypto from 'crypto';
+import { sha256Hex } from '../../common/crypto/hash.util';
+import { parseExpiryDate } from '../../common/utils/duration.util';
 import { PrismaService } from '../../prisma/prisma.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { DeviceSessionOutput } from './dto/device-session.output';
@@ -131,17 +133,12 @@ export class TokenService {
   }
 
   private hashRefreshToken(rawToken: string): string {
-    return crypto.createHash('sha256').update(rawToken).digest('hex');
+    return sha256Hex(rawToken);
   }
 
   private parseRefreshExpiry(): Date {
     const expiresIn = this.config.get<string>('jwt.refreshExpiresIn') ?? '7d';
-    const match = expiresIn.match(/^(\d+)([smhd])$/);
-    if (!match) return new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const multipliers: Record<string, number> = {
-      s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000,
-    };
-    return new Date(Date.now() + parseInt(match[1]) * multipliers[match[2]]);
+    return parseExpiryDate(expiresIn, 7 * 24 * 60 * 60 * 1000);
   }
 
   parseDeviceName(userAgent?: string): string {

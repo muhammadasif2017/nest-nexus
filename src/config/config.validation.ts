@@ -1,4 +1,3 @@
-// src/config/config.validation.ts
 import { z } from 'zod';
 
 // This schema is the single source of truth for ALL required environment variables.
@@ -40,5 +39,5 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
     throw new Error(`\n❌ Invalid environment variables:\n${issues}`);
   }
 
-  return parsed.data; // Returns the validated, typed config object
+  return parsed.data;
 };

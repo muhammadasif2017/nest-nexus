@@ -54,7 +54,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
   // GraphQLError object. Apollo will wrap it in the `errors` array automatically.
   private handleGraphQLError(exception: unknown, host: ArgumentsHost): GraphQLError {
     const { message, code, statusCode } = this.normalizeException(exception);
-    const isInternal = statusCode >= 500;
+    const isInternal = this.isInternalError(statusCode);
 
     // Log internal errors with full stack traces for debugging.
     // For client errors (4xx), a warn log is sufficient — they're expected.
@@ -95,7 +95,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
     const { message, code, statusCode } = this.normalizeException(exception);
-    const isInternal = statusCode >= 500;
+    const isInternal = this.isInternalError(statusCode);
 
     if (isInternal) {
       this.logger.error(
@@ -184,6 +184,10 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       code: ErrorCode.INTERNAL_ERROR,
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
     };
+  }
+
+  private isInternalError(statusCode: number): boolean {
+    return statusCode >= 500;
   }
 
   private statusToErrorCode(status: number): ErrorCode {
