@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TwoFactorService } from './two-factor.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../../prisma/prisma.service';
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -24,13 +24,13 @@ jest.mock('qrcode', () => ({
   toDataURL: jest.fn().mockResolvedValue('data:image/png;base64,MOCK'),
 }));
 
-jest.mock('../../common/crypto/totp-crypto.util', () => ({
+jest.mock('../../../common/crypto/totp-crypto.util', () => ({
   encryptTotpSecret: jest.fn().mockReturnValue('enc:MOCK_ENCRYPTED'),
   decryptTotpSecret: jest.fn().mockReturnValue('MOCK_TOTP_SECRET'),
 }));
 
 import { authenticator } from 'otplib';
-import { encryptTotpSecret, decryptTotpSecret } from '../../common/crypto/totp-crypto.util';
+import { encryptTotpSecret, decryptTotpSecret } from '../../../common/crypto/totp-crypto.util';
 
 const mockAuthenticator = authenticator as jest.Mocked<typeof authenticator>;
 const mockEncrypt = encryptTotpSecret as jest.Mock;

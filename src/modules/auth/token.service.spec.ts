@@ -44,6 +44,7 @@ const makePrismaMock = () => ({
   refreshToken: {
     create: jest.fn().mockResolvedValue({}),
     findMany: jest.fn().mockResolvedValue([]),
+    findFirst: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue({}),
     deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
   },
@@ -437,6 +438,36 @@ describe('TokenService', () => {
       expect(ctx.prisma.refreshToken.deleteMany).toHaveBeenCalledWith({
         where: { userId: 'user-id-1', deviceId: 'device-to-revoke' },
       });
+    });
+  });
+
+  // ── getCurrentDeviceId ────────────────────────────────────────────────────
+
+  describe('getCurrentDeviceId()', () => {
+    it('returns undefined when no raw token is given', async () => {
+      const result = await ctx.service.getCurrentDeviceId('user-id-1', undefined);
+      expect(result).toBeUndefined();
+      expect(ctx.prisma.refreshToken.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('looks up the token by hash, scoped to the given userId', async () => {
+      ctx.prisma.refreshToken.findFirst.mockResolvedValue(makeRefreshToken({ tokenHash: RAW_TOKEN_HASH }));
+      await ctx.service.getCurrentDeviceId('user-id-1', RAW_TOKEN);
+      expect(ctx.prisma.refreshToken.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-id-1', tokenHash: RAW_TOKEN_HASH },
+      });
+    });
+
+    it('returns the deviceId of the matched token', async () => {
+      ctx.prisma.refreshToken.findFirst.mockResolvedValue(makeRefreshToken({ deviceId: 'device-id-1', tokenHash: RAW_TOKEN_HASH }));
+      const result = await ctx.service.getCurrentDeviceId('user-id-1', RAW_TOKEN);
+      expect(result).toBe('device-id-1');
+    });
+
+    it('returns undefined when no matching token is found', async () => {
+      ctx.prisma.refreshToken.findFirst.mockResolvedValue(null);
+      const result = await ctx.service.getCurrentDeviceId('user-id-1', RAW_TOKEN);
+      expect(result).toBeUndefined();
     });
   });
 

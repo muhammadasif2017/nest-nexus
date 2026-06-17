@@ -1,0 +1,71 @@
+import { Controller, Post, Body, Req, Res, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { AuthService } from '../auth/auth.service';
+import { SessionLoginInput } from './dto/session-login.input';
+import { SessionGuard } from './session-auth.guard';
+import { Public } from '../../common/decorators/public.decorator';
+
+@ApiTags('session-auth')
+@Controller('auth/session')
+export class SessionAuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('login')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ strict: { limit: 5, ttl: 600_000 } })
+  @ApiOperation({ summary: 'Session-based login', description: 'For traditional web clients. Sets HttpOnly session cookie — no tokens returned.' })
+  @ApiBody({ type: SessionLoginInput })
+  @ApiResponse({ status: 200, description: 'Session created.' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
+  async login(
+    @Body() dto: SessionLoginInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const { auth } = await this.authService.login(dto, req.ip);
+
+    if ((auth as any).isTwoFactorPending) {
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        statusCode: 401,
+        errorCode: 'TWO_FACTOR_REQUIRED',
+        message: 'Two-factor authentication required. Use the JWT flow to complete 2FA.',
+      });
+    }
+
+    // Regenerate the session ID after login — this prevents session fixation attacks,
+    // where an attacker pre-sets a known session ID and waits for the victim to log in.
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Store the user payload in the session. The session is persisted to PostgreSQL
+    // via connect-pg-simple (configured in main.ts).
+    (req.session as any).user = auth.user;
+    (req.session as any).userId = auth.user!.id;
+
+    // We don't return tokens here — the session cookie is the auth mechanism.
+    return { message: 'Logged in successfully.', user: auth.user };
+  }
+
+  @Post('logout')
+  @UseGuards(SessionGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Session-based logout', description: 'Destroys the server-side session.' })
+  @ApiResponse({ status: 204, description: 'Session destroyed.' })
+  @ApiResponse({ status: 401, description: 'No active session.' })
+  async logout(@Req() req: Request) {
+    await new Promise<void>((resolve, reject) => {
+      req.session.destroy((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
+}

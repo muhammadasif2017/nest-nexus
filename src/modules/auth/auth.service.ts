@@ -13,7 +13,7 @@ import { AuthOutput } from './dto/auth.output';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User, Prisma } from '@prisma/client';
-import { OAuthProfile } from './strategies/google.strategy';
+import { OAuthProfile } from './oauth/strategies/google.strategy';
 
 type UserForAuth = Pick<User,
   'id' | 'email' | 'displayName' | 'roles' |

@@ -7,13 +7,19 @@ import { AuthService } from './auth.service';
 import { AuthResolver } from './auth.resolver';
 import { AuthController } from './auth.controller';
 import { TokenService } from './token.service';
-import { TwoFactorService } from './two-factor.service';
-import { MagicLinkService } from './magic-link.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy';
-import { SessionSerializer } from './strategies/session.strategy';
-import { GoogleStrategy } from './strategies/google.strategy';
-import { GithubStrategy } from './strategies/github.strategy';
+
+import { OAuthController } from './oauth/oauth.controller';
+import { GoogleStrategy } from './oauth/strategies/google.strategy';
+import { GithubStrategy } from './oauth/strategies/github.strategy';
+
+import { TwoFactorController } from './two-factor/two-factor.controller';
+import { TwoFactorService } from './two-factor/two-factor.service';
+
+import { MagicLinkController } from './magic-link/magic-link.controller';
+import { MagicLinkService } from './magic-link/magic-link.service';
+
 import { QueuesModule } from '../../queues/queues.module';
 
 @Module({
@@ -37,11 +43,10 @@ import { QueuesModule } from '../../queues/queues.module';
     MagicLinkService,
     JwtStrategy,
     JwtRefreshStrategy,
-    SessionSerializer,
     GoogleStrategy,
     GithubStrategy,
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, OAuthController, TwoFactorController, MagicLinkController],
   exports: [AuthService, TokenService],
 })
 export class AuthModule {}

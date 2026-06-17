@@ -9,8 +9,8 @@ import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../prisma/prisma.service';
-import { encryptTotpSecret, decryptTotpSecret } from '../../common/crypto/totp-crypto.util';
+import { PrismaService } from '../../../prisma/prisma.service';
+import { encryptTotpSecret, decryptTotpSecret } from '../../../common/crypto/totp-crypto.util';
 
 @Injectable()
 export class TwoFactorService {
