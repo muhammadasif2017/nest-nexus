@@ -30,7 +30,7 @@ export class UsersService {
         lastLoginAt: true, createdAt: true, updatedAt: true,
       },
     });
-    const result = plainToInstance(UserOutput, users, { excludeExtraneousValues: true });
+    const result = this.toOutput(users);
     await this.cache.set('users:all', result);
     return result;
   }
@@ -42,7 +42,7 @@ export class UsersService {
 
     const user = await this.userLoader.batchUsers.load(id);
     if (!user) throw new NotFoundException(`User with id ${id} not found.`);
-    const result = plainToInstance(UserOutput, user, { excludeExtraneousValues: true });
+    const result = this.toOutput(user);
     await this.cache.set(key, result);
     return result;
   }
@@ -53,22 +53,25 @@ export class UsersService {
   }
 
   async update(id: string, dto: UpdateUserInput): Promise<UserOutput> {
-    try {
-      const updated = await this.prisma.user.update({ where: { id }, data: dto });
+    const updated = await this.prisma.user
+      .update({ where: { id }, data: dto })
+      .catch((e) => this.rethrowNotFound(e, id));
     this.eventEmitter.emit('user.updated', { userId: id });
-    return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
-    } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025') {
-        throw new NotFoundException(`User with id ${id} not found.`);
-      }
-      throw e;
-    }
+    return this.toOutput(updated);
   }
 
   async deactivate(id: string): Promise<UserOutput> {
-    const updated = await this.prisma.user.update({ where: { id }, data: { isActive: false } }).catch((e) => this.rethrowNotFound(e, id));
+    const updated = await this.prisma.user
+      .update({ where: { id }, data: { isActive: false } })
+      .catch((e) => this.rethrowNotFound(e, id));
     this.eventEmitter.emit('user.deactivated', { userId: id });
-    return plainToInstance(UserOutput, updated, { excludeExtraneousValues: true });
+    return this.toOutput(updated);
+  }
+
+  private toOutput(data: object[]): UserOutput[];
+  private toOutput(data: object): UserOutput;
+  private toOutput(data: object | object[]): UserOutput | UserOutput[] {
+    return plainToInstance(UserOutput, data, { excludeExtraneousValues: true });
   }
 
   private rethrowNotFound(e: unknown, id: string): never {

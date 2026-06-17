@@ -65,11 +65,15 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
 
   @OnEvent('user.updated')
   async onUserUpdated(payload: { userId: string }): Promise<void> {
-    await this.invalidate([`users:id:${payload.userId}`, 'users:all']);
+    await this.invalidateUserCache(payload.userId);
   }
 
   @OnEvent('user.deactivated')
   async onUserDeactivated(payload: { userId: string }): Promise<void> {
-    await this.invalidate([`users:id:${payload.userId}`, 'users:all']);
+    await this.invalidateUserCache(payload.userId);
+  }
+
+  private async invalidateUserCache(userId: string): Promise<void> {
+    await this.invalidate([`users:id:${userId}`, 'users:all']);
   }
 }

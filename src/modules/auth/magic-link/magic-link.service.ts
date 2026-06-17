@@ -4,6 +4,7 @@ import { Queue } from 'bullmq';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
+import { sha256Hex } from '../../../common/crypto/hash.util';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { QUEUE_EMAIL, EmailJobName } from '../../../queues/queues.constants';
 import { MagicLinkEmailData } from '../../../queues/dto/email.job.dto';
@@ -20,7 +21,7 @@ export class MagicLinkService {
 
   async send(email: string): Promise<void> {
     const token = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = sha256Hex(token);
 
     let user: { id: string; displayName: string };
     try {
@@ -50,7 +51,7 @@ export class MagicLinkService {
   }
 
   async verify(token: string): Promise<string> {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = sha256Hex(token);
 
     const user = await this.prisma.user.findFirst({
       where: { magicLinkTokenHash: tokenHash, magicLinkExpiresAt: { gt: new Date() } },

@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { encryptTotpSecret, decryptTotpSecret } from '../../../common/crypto/totp-crypto.util';
+import { sha256Hex } from '../../../common/crypto/hash.util';
 
 @Injectable()
 export class TwoFactorService {
@@ -55,7 +56,7 @@ export class TwoFactorService {
     }
 
     const backupCodes = this.generateBackupCodes();
-    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, c.replace(/-/g, '').toUpperCase()));
+    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, this.normalizeBackupCode(c)));
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -93,7 +94,7 @@ export class TwoFactorService {
     if (authenticator.verify({ token: code, secret })) return true;
 
     // Try backup codes — strip formatting before hashing
-    const hash = this.hashCode(userId, code.replace(/-/g, '').toUpperCase());
+    const hash = this.hashCode(userId, this.normalizeBackupCode(code));
     if (!user.twoFactorBackupCodes.includes(hash)) return false;
 
     // Single-use: remove the matched backup code
@@ -110,6 +111,10 @@ export class TwoFactorService {
   }
 
   private hashCode(userId: string, code: string): string {
-    return crypto.createHash('sha256').update(userId + ':' + code).digest('hex');
+    return sha256Hex(`${userId}:${code}`);
+  }
+
+  private normalizeBackupCode(code: string): string {
+    return code.replace(/-/g, '').toUpperCase();
   }
 }

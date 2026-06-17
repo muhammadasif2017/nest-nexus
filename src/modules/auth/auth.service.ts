@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User, Prisma } from '@prisma/client';
 import { OAuthProfile } from './oauth/strategies/google.strategy';
+import { parseExpiryDate } from '../../common/utils/duration.util';
 
 type UserForAuth = Pick<User,
   'id' | 'email' | 'displayName' | 'roles' |
@@ -199,7 +200,7 @@ export class AuthService {
   }> {
     const { accessToken, refreshToken } = await this.tokenService.rotateRefreshToken(rawRefreshToken);
     const expiresIn = this.config.get<string>('jwt.expiresIn') ?? '15m';
-    const expiresAt = this.parseExpiresIn(expiresIn);
+    const expiresAt = parseExpiryDate(expiresIn, 15 * 60 * 1000);
     return { auth: { accessToken, accessTokenExpiresAt: expiresAt } as any, refreshToken };
   }
 
@@ -219,20 +220,10 @@ export class AuthService {
     const refreshToken = await this.tokenService.generateRefreshToken(user.id);
 
     const expiresIn = this.config.get<string>('jwt.expiresIn') ?? '15m';
-    const accessTokenExpiresAt = this.parseExpiresIn(expiresIn);
+    const accessTokenExpiresAt = parseExpiryDate(expiresIn, 15 * 60 * 1000);
 
     const userOutput = plainToInstance(UserOutput, user, { excludeExtraneousValues: true });
     const auth: AuthOutput = { accessToken, user: userOutput, accessTokenExpiresAt };
     return { auth, refreshToken };
-  }
-
-  private parseExpiresIn(expiresIn: string): Date {
-    const match = expiresIn.match(/^(\d+)([smhd])$/);
-    if (!match) return new Date(Date.now() + 15 * 60 * 1000);
-    const [, amount, unit] = match;
-    const multipliers: Record<string, number> = {
-      s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000,
-    };
-    return new Date(Date.now() + parseInt(amount) * multipliers[unit]);
   }
 }
