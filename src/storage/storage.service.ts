@@ -1,4 +1,10 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger, InternalServerErrorException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -43,7 +49,9 @@ export class StorageService implements OnModuleInit, OnModuleDestroy {
         await this.client.send(new CreateBucketCommand({ Bucket: this.bucket }));
         this.logger.log(`Created bucket: ${this.bucket}`);
       } catch (createErr) {
-        this.logger.warn(`Could not create bucket "${this.bucket}": ${(createErr as Error).message}`);
+        this.logger.warn(
+          `Could not create bucket "${this.bucket}": ${(createErr as Error).message}`,
+        );
       }
     }
   }
@@ -86,11 +94,9 @@ export class StorageService implements OnModuleInit, OnModuleDestroy {
   }
 
   async getPresignedUrl(key: string, expiresInSeconds = 3600): Promise<string> {
-    return getSignedUrl(
-      this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: expiresInSeconds },
-    );
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), {
+      expiresIn: expiresInSeconds,
+    });
   }
 
   getPublicUrl(key: string): string {

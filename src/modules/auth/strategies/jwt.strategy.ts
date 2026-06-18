@@ -48,7 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       select: { isActive: true },
     });
 
-    const ok = !!(user?.isActive);
+    const ok = !!user?.isActive;
     this.setCacheEntry(payload.sub, { ok, exp: now + JwtStrategy.CACHE_TTL });
 
     if (!ok) throw new UnauthorizedException('User account is inactive or not found.');

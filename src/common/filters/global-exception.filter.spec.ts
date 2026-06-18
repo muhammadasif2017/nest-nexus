@@ -31,8 +31,13 @@ interface MockResponse {
 
 const makeMockResponse = (): MockResponse => {
   const res: MockResponse = {
-    status: jest.fn().mockImplementation((s: number) => { res._status = s; return res; }),
-    json: jest.fn().mockImplementation((b: Record<string, unknown>) => { res._body = b; }),
+    status: jest.fn().mockImplementation((s: number) => {
+      res._status = s;
+      return res;
+    }),
+    json: jest.fn().mockImplementation((b: Record<string, unknown>) => {
+      res._body = b;
+    }),
   };
   return res;
 };
@@ -52,8 +57,7 @@ const httpHost = (
   res,
 });
 
-const gqlHost = (): ArgumentsHost =>
-  ({ getType: () => 'graphql' }) as unknown as ArgumentsHost;
+const gqlHost = (): ArgumentsHost => ({ getType: () => 'graphql' }) as unknown as ArgumentsHost;
 
 const makePrismaError = (code: string, meta?: Record<string, unknown>) =>
   new Prisma.PrismaClientKnownRequestError('Prisma error', {
@@ -76,7 +80,9 @@ afterAll(() => jest.restoreAllMocks());
 describe('GlobalExceptionFilter', () => {
   let filter: GlobalExceptionFilter;
 
-  beforeEach(() => { filter = makeFilter(); });
+  beforeEach(() => {
+    filter = makeFilter();
+  });
 
   // ── Routing ───────────────────────────────────────────────────────────────
 
@@ -123,9 +129,7 @@ describe('GlobalExceptionFilter', () => {
     });
 
     it('maps HttpException (array message from ValidationPipe) — joins with "; "', () => {
-      const body = catch_(
-        new HttpException({ message: ['field1 error', 'field2 error'] }, 400),
-      );
+      const body = catch_(new HttpException({ message: ['field1 error', 'field2 error'] }, 400));
       expect(body.message).toBe('field1 error; field2 error');
     });
 
@@ -298,12 +302,18 @@ describe('GlobalExceptionFilter', () => {
 
     describe('dev vs prod — originalMessage', () => {
       it('includes originalMessage in development for 5xx', () => {
-        const err = makeFilter('development').catch(new Error('real crash message'), gqlHost()) as GraphQLError;
+        const err = makeFilter('development').catch(
+          new Error('real crash message'),
+          gqlHost(),
+        ) as GraphQLError;
         expect((err.extensions as any).originalMessage).toBe('real crash message');
       });
 
       it('omits originalMessage in production', () => {
-        const err = makeFilter('production').catch(new Error('real crash message'), gqlHost()) as GraphQLError;
+        const err = makeFilter('production').catch(
+          new Error('real crash message'),
+          gqlHost(),
+        ) as GraphQLError;
         expect((err.extensions as any).originalMessage).toBeUndefined();
       });
 

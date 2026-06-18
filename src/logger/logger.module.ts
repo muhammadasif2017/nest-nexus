@@ -31,7 +31,7 @@ import crypto from 'node:crypto';
             redact: {
               paths: [
                 'req.headers.authorization', // JWT Bearer token
-                'req.headers.cookie',          // Session cookie
+                'req.headers.cookie', // Session cookie
                 'req.body.password',
                 'req.body.newPassword',
                 'req.body.confirmPassword',

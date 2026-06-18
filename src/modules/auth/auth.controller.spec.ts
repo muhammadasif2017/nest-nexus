@@ -30,7 +30,13 @@ const makeTokenServiceMock = () => ({
   getRefreshTokenCookieOptions: jest.fn().mockReturnValue(cookieOptions),
   getCurrentDeviceId: jest.fn().mockResolvedValue('device-id-1'),
   listDeviceSessions: jest.fn().mockResolvedValue([
-    { deviceId: 'device-id-1', deviceName: 'Windows Device', lastUsedAt: new Date(), createdAt: new Date(), isCurrent: true },
+    {
+      deviceId: 'device-id-1',
+      deviceName: 'Windows Device',
+      lastUsedAt: new Date(),
+      createdAt: new Date(),
+      isCurrent: true,
+    },
   ]),
   revokeDeviceSession: jest.fn().mockResolvedValue(undefined),
 });
@@ -65,7 +71,9 @@ describe('AuthController', () => {
       const { controller } = makeController();
       const req = makeReq({ cookies: {} });
       const res = makeRes();
-      await expect(controller.refresh(req as any, res as any)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.refresh(req as any, res as any)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('does not call authService.refresh when cookie is missing', async () => {
@@ -114,7 +122,10 @@ describe('AuthController', () => {
       const { controller, tokenService } = makeController();
       const user: JwtPayload = { sub: 'user-id-1', email: 'user@test.com', roles: ['user'] };
       await controller.revokeSession(user, 'device-to-revoke');
-      expect(tokenService.revokeDeviceSession).toHaveBeenCalledWith('user-id-1', 'device-to-revoke');
+      expect(tokenService.revokeDeviceSession).toHaveBeenCalledWith(
+        'user-id-1',
+        'device-to-revoke',
+      );
     });
   });
 });

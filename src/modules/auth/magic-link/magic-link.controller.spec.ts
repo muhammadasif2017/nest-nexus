@@ -37,7 +37,11 @@ const makeController = () => {
   const authService = makeAuthServiceMock();
   const tokenService = makeTokenServiceMock();
   const magicLinkService = makeMagicLinkServiceMock();
-  const controller = new MagicLinkController(authService as any, tokenService as any, magicLinkService as any);
+  const controller = new MagicLinkController(
+    authService as any,
+    tokenService as any,
+    magicLinkService as any,
+  );
   return { controller, authService, tokenService, magicLinkService };
 };
 

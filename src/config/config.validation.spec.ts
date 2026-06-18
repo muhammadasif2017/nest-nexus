@@ -85,9 +85,7 @@ describe('configValidationSchema', () => {
     });
 
     it('throws for invalid NODE_ENV value', () => {
-      expect(() =>
-        configValidationSchema({ ...validConfig, NODE_ENV: 'staging' }),
-      ).toThrow();
+      expect(() => configValidationSchema({ ...validConfig, NODE_ENV: 'staging' })).toThrow();
     });
   });
 
@@ -106,9 +104,7 @@ describe('configValidationSchema', () => {
 
   describe('SESSION_SECRET validation', () => {
     it('throws when SESSION_SECRET is shorter than 32 chars', () => {
-      expect(() =>
-        configValidationSchema({ ...validConfig, SESSION_SECRET: 'short' }),
-      ).toThrow();
+      expect(() => configValidationSchema({ ...validConfig, SESSION_SECRET: 'short' })).toThrow();
     });
 
     it('throws when SESSION_SECRET is missing', () => {
@@ -145,9 +141,7 @@ describe('configValidationSchema', () => {
 
   describe('JWT secrets validation', () => {
     it('throws when JWT_SECRET is shorter than 32 chars', () => {
-      expect(() =>
-        configValidationSchema({ ...validConfig, JWT_SECRET: 'tooshort' }),
-      ).toThrow();
+      expect(() => configValidationSchema({ ...validConfig, JWT_SECRET: 'tooshort' })).toThrow();
     });
 
     it('throws when JWT_REFRESH_SECRET is shorter than 32 chars', () => {
@@ -169,7 +163,10 @@ describe('configValidationSchema', () => {
 
   describe('TOTP_ENCRYPTION_KEY validation', () => {
     it('accepts a valid 64-char hex key', () => {
-      const result = configValidationSchema({ ...validConfig, TOTP_ENCRYPTION_KEY: 'f'.repeat(64) });
+      const result = configValidationSchema({
+        ...validConfig,
+        TOTP_ENCRYPTION_KEY: 'f'.repeat(64),
+      });
       expect(result.TOTP_ENCRYPTION_KEY).toHaveLength(64);
     });
 

@@ -1,5 +1,10 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { VersioningType, ClassSerializerInterceptor, ValidationPipe, RequestMethod } from '@nestjs/common';
+import {
+  VersioningType,
+  ClassSerializerInterceptor,
+  ValidationPipe,
+  RequestMethod,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -157,7 +162,11 @@ async function bootstrap() {
       .setDescription('REST endpoints for nest-nexus. GraphQL lives at /graphql.')
       .setVersion('1.0')
       .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'access-token')
-      .addCookieAuth('refresh_token', { type: 'apiKey', in: 'cookie', name: 'refresh_token' }, 'refresh-token')
+      .addCookieAuth(
+        'refresh_token',
+        { type: 'apiKey', in: 'cookie', name: 'refresh_token' },
+        'refresh-token',
+      )
       .build();
 
     const document = SwaggerModule.createDocument(app, swaggerConfig);

@@ -26,13 +26,15 @@ export class ClamAvService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     if (!this.enabled) {
-      this.logger.warn('ClamAV scanning is DISABLED (CLAMAV_ENABLED=false). Do not use in production.');
+      this.logger.warn(
+        'ClamAV scanning is DISABLED (CLAMAV_ENABLED=false). Do not use in production.',
+      );
       return;
     }
 
     try {
       // Dynamic import — clamscan has no ESM export; require at runtime
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const NodeClam = require('clamscan');
       this.scanner = await new NodeClam().init({
         clamdscan: {
@@ -46,7 +48,9 @@ export class ClamAvService implements OnModuleInit {
       });
       this.logger.log(`ClamAV connected at ${this.host}:${this.port}`);
     } catch (err) {
-      this.logger.error(`ClamAV init failed: ${(err as Error).message}. Uploads will be rejected until ClamAV is reachable.`);
+      this.logger.error(
+        `ClamAV init failed: ${(err as Error).message}. Uploads will be rejected until ClamAV is reachable.`,
+      );
     }
   }
 

@@ -34,11 +34,7 @@ export class RedisLockService {
 
   // Execute a function under a distributed lock. Skips silently if lock not acquired
   // (another instance is already running). Use for scheduled jobs — not for user requests.
-  async withLock<T>(
-    key: string,
-    fn: () => Promise<T>,
-    ttlSeconds = 30,
-  ): Promise<T | null> {
+  async withLock<T>(key: string, fn: () => Promise<T>, ttlSeconds = 30): Promise<T | null> {
     const token = await this.acquire(key, ttlSeconds);
     if (!token) {
       this.logger.debug(`Lock "${key}" held by another instance — skipping`);

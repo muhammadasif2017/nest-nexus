@@ -18,12 +18,11 @@ const mockConfig = (overrides: Record<string, unknown> = {}) => ({
 describe('ClamAvService', () => {
   let service: ClamAvService;
 
-  async function buildService(configOverrides: Record<string, unknown> = {}): Promise<ClamAvService> {
+  async function buildService(
+    configOverrides: Record<string, unknown> = {},
+  ): Promise<ClamAvService> {
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ClamAvService,
-        { provide: ConfigService, useValue: mockConfig(configOverrides) },
-      ],
+      providers: [ClamAvService, { provide: ConfigService, useValue: mockConfig(configOverrides) }],
     }).compile();
     return module.get(ClamAvService);
   }

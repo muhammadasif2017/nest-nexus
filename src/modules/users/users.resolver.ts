@@ -57,9 +57,7 @@ export class UsersResolver {
   // ── Admin: Deactivate a user ───────────────────────────────────────────────
   @Mutation(() => UserOutput)
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async deactivateUser(
-    @Args('id', { type: () => ID }) id: string,
-  ): Promise<UserOutput> {
+  async deactivateUser(@Args('id', { type: () => ID }) id: string): Promise<UserOutput> {
     return this.usersService.deactivate(id);
   }
 }

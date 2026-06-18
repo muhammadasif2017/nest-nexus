@@ -24,10 +24,7 @@ interface AuthenticatedSocket extends Socket {
   cors: {
     // ConfigService is unavailable at decorator evaluation time (runs before DI).
     // Origin is validated per-request against CLIENT_ORIGIN env var.
-    origin: (
-      reqOrigin: string | undefined,
-      cb: (err: Error | null, allow: boolean) => void,
-    ) => {
+    origin: (reqOrigin: string | undefined, cb: (err: Error | null, allow: boolean) => void) => {
       const allowed = process.env.CLIENT_ORIGIN ?? 'http://localhost:3000';
       cb(null, !reqOrigin || reqOrigin === allowed);
     },

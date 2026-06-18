@@ -18,7 +18,7 @@ const makeRawUser = (overrides: Record<string, unknown> = {}) => ({
   lastLoginAt: null,
   createdAt: new Date('2024-01-01'),
   updatedAt: new Date('2024-01-01'),
-  password: 'hashed-secret',        // excluded by serialization
+  password: 'hashed-secret', // excluded by serialization
   ...overrides,
 });
 
@@ -47,7 +47,11 @@ const makeLoaderMock = () => ({
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 const makeEventEmitterMock = () => ({ emit: jest.fn() });
-const makeCacheMock = () => ({ get: jest.fn().mockResolvedValue(undefined), set: jest.fn().mockResolvedValue(undefined), del: jest.fn().mockResolvedValue(undefined) });
+const makeCacheMock = () => ({
+  get: jest.fn().mockResolvedValue(undefined),
+  set: jest.fn().mockResolvedValue(undefined),
+  del: jest.fn().mockResolvedValue(undefined),
+});
 
 const makeService = () => {
   const prisma = makePrismaMock();
@@ -75,9 +79,16 @@ describe('UsersService', () => {
       expect(prisma.user.findMany).toHaveBeenCalledWith({
         where: { isActive: true },
         select: {
-          id: true, email: true, displayName: true, roles: true,
-          isEmailVerified: true, isActive: true, avatarUrl: true,
-          lastLoginAt: true, createdAt: true, updatedAt: true,
+          id: true,
+          email: true,
+          displayName: true,
+          roles: true,
+          isEmailVerified: true,
+          isActive: true,
+          avatarUrl: true,
+          lastLoginAt: true,
+          createdAt: true,
+          updatedAt: true,
         },
       });
     });
