@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Args, Context } from '@nestjs/graphql';
-import { UseGuards, HttpCode } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -66,9 +66,7 @@ export class AuthResolver {
   // HttpOnly cookie — the client never touches it directly, which is the point.
   @Mutation(() => AuthOutput)
   @Public()
-  async refreshTokens(
-    @Context() { req, res }: GqlContext,
-  ): Promise<Omit<AuthOutput, 'user'>> {
+  async refreshTokens(@Context() { req, res }: GqlContext): Promise<Omit<AuthOutput, 'user'>> {
     const rawRefreshToken = req.cookies?.['refresh_token'];
     if (!rawRefreshToken) {
       // Throwing here goes through our GlobalExceptionFilter,
@@ -84,10 +82,7 @@ export class AuthResolver {
 
   // ── Logout ────────────────────────────────────────────────────────────────
   @Mutation(() => Boolean)
-  async logout(
-    @CurrentUser() user: JwtPayload,
-    @Context() { res }: GqlContext,
-  ): Promise<boolean> {
+  async logout(@CurrentUser() user: JwtPayload, @Context() { res }: GqlContext): Promise<boolean> {
     await this.authService.logout(user.sub);
 
     // Clear the refresh token cookie. Setting maxAge: 0 immediately expires it.

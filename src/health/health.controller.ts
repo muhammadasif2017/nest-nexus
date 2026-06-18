@@ -1,5 +1,10 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckService, MemoryHealthIndicator, DiskHealthIndicator } from '@nestjs/terminus';
+import {
+  HealthCheck,
+  HealthCheckService,
+  MemoryHealthIndicator,
+  DiskHealthIndicator,
+} from '@nestjs/terminus';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PrismaHealthIndicator } from './prisma.health';
 import { RedisHealthIndicator } from './redis.health';
@@ -20,9 +25,7 @@ export class HealthController {
   @HealthCheck()
   @ApiOperation({ summary: 'Liveness probe (memory only)' })
   live() {
-    return this.health.check([
-      () => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024),
-    ]);
+    return this.health.check([() => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024)]);
   }
 
   // Kubernetes readiness probe — app can serve traffic (db + cache reachable)

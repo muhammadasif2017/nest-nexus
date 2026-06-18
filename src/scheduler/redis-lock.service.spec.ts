@@ -19,10 +19,7 @@ describe('RedisLockService', () => {
     jest.clearAllMocks();
     const redisClientService = makeRedisClientServiceMock();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        RedisLockService,
-        { provide: RedisClientService, useValue: redisClientService },
-      ],
+      providers: [RedisLockService, { provide: RedisClientService, useValue: redisClientService }],
     }).compile();
     service = module.get(RedisLockService);
     redis = redisClientService.client;
@@ -53,7 +50,13 @@ describe('RedisLockService', () => {
     it('prefixes key with "lock:" to namespace from other Redis keys', async () => {
       redis.set.mockResolvedValue('OK');
       await service.acquire('cleanup:tokens', 60);
-      expect(redis.set).toHaveBeenCalledWith('lock:cleanup:tokens', expect.any(String), 'EX', 60, 'NX');
+      expect(redis.set).toHaveBeenCalledWith(
+        'lock:cleanup:tokens',
+        expect.any(String),
+        'EX',
+        60,
+        'NX',
+      );
     });
   });
 
@@ -81,7 +84,7 @@ describe('RedisLockService', () => {
       await service.release('my-lock', 'token-xyz');
       const [script] = redis.eval.mock.calls[0];
       expect(script).toContain('ARGV[1]'); // script checks owner token
-      expect(script).toContain('del');     // script deletes if match
+      expect(script).toContain('del'); // script deletes if match
     });
   });
 

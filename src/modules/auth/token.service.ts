@@ -88,7 +88,9 @@ export class TokenService {
       // Revoked token presented — token was already rotated, indicating possible theft.
       // Revoke the entire family to invalidate all derived tokens.
       await this.revokeTokenFamily(payload.sub, payload.family);
-      throw new UnauthorizedException('Refresh token has been revoked. All sessions have been terminated for security.');
+      throw new UnauthorizedException(
+        'Refresh token has been revoked. All sessions have been terminated for security.',
+      );
     }
 
     await this.prisma.refreshToken.update({
@@ -171,7 +173,10 @@ export class TokenService {
     for (const token of tokens) {
       if (!token.deviceId) continue;
       const existing = deviceMap.get(token.deviceId);
-      if (!existing || (token.lastUsedAt && (!existing.lastUsedAt || token.lastUsedAt > existing.lastUsedAt))) {
+      if (
+        !existing ||
+        (token.lastUsedAt && (!existing.lastUsedAt || token.lastUsedAt > existing.lastUsedAt))
+      ) {
         deviceMap.set(token.deviceId, token);
       }
     }

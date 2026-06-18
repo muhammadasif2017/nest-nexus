@@ -25,9 +25,16 @@ export class UsersService {
     const users = await this.prisma.user.findMany({
       where: { isActive: true },
       select: {
-        id: true, email: true, displayName: true, roles: true,
-        isEmailVerified: true, isActive: true, avatarUrl: true,
-        lastLoginAt: true, createdAt: true, updatedAt: true,
+        id: true,
+        email: true,
+        displayName: true,
+        roles: true,
+        isEmailVerified: true,
+        isActive: true,
+        avatarUrl: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
     const result = this.toOutput(users);

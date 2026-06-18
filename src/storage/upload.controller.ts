@@ -1,12 +1,25 @@
 import {
-  Controller, Post, Delete, Param, UploadedFile,
-  UseInterceptors, UseGuards, ParseFilePipe,
-  MaxFileSizeValidator, HttpCode, HttpStatus, ForbiddenException,
+  Controller,
+  Post,
+  Delete,
+  Param,
+  UploadedFile,
+  UseInterceptors,
+  UseGuards,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  HttpCode,
+  HttpStatus,
+  ForbiddenException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
-  ApiTags, ApiOperation, ApiResponse, ApiBearerAuth,
-  ApiConsumes, ApiBody,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { memoryStorage } from 'multer';
 import crypto from 'crypto';
@@ -17,8 +30,8 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { JwtPayload } from '../modules/auth/strategies/jwt.strategy';
 
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024;  // 5 MB
-const MAX_FILE_SIZE = 20 * 1024 * 1024;  // 20 MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB
 
 @ApiTags('upload')
 @Controller('upload')
@@ -35,12 +48,23 @@ export class UploadController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload profile avatar', description: 'Scans for viruses, resizes to 256×256 WebP, uploads to S3.' })
-  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @ApiResponse({ status: 200, description: 'Upload successful.', schema: { properties: { url: { type: 'string' } } } })
+  @ApiOperation({
+    summary: 'Upload profile avatar',
+    description: 'Scans for viruses, resizes to 256×256 WebP, uploads to S3.',
+  })
+  @ApiBody({
+    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload successful.',
+    schema: { properties: { url: { type: 'string' } } },
+  })
   @ApiResponse({ status: 400, description: 'Virus detected or unsupported file type.' })
   async uploadAvatar(
-    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: MAX_IMAGE_SIZE })] }))
+    @UploadedFile(
+      new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: MAX_IMAGE_SIZE })] }),
+    )
     file: Express.Multer.File,
     @CurrentUser() user: JwtPayload,
   ): Promise<{ url: string }> {
@@ -55,11 +79,22 @@ export class UploadController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('file', { storage: memoryStorage() }))
   @ApiConsumes('multipart/form-data')
-  @ApiOperation({ summary: 'Upload a generic file', description: 'Virus-scanned. Stored as-is (no image processing). Max 20 MB.' })
-  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
-  @ApiResponse({ status: 200, description: 'Upload successful.', schema: { properties: { url: { type: 'string' }, key: { type: 'string' } } } })
+  @ApiOperation({
+    summary: 'Upload a generic file',
+    description: 'Virus-scanned. Stored as-is (no image processing). Max 20 MB.',
+  })
+  @ApiBody({
+    schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload successful.',
+    schema: { properties: { url: { type: 'string' }, key: { type: 'string' } } },
+  })
   async uploadFile(
-    @UploadedFile(new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: MAX_FILE_SIZE })] }))
+    @UploadedFile(
+      new ParseFilePipe({ validators: [new MaxFileSizeValidator({ maxSize: MAX_FILE_SIZE })] }),
+    )
     file: Express.Multer.File,
     @CurrentUser() user: JwtPayload,
   ): Promise<{ url: string; key: string }> {
@@ -75,16 +110,15 @@ export class UploadController {
 
   @Delete('*')
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Delete an uploaded file', description: 'Key must be owned by the authenticated user (prefixed with avatars/{userId}/ or uploads/{userId}/).' })
+  @ApiOperation({
+    summary: 'Delete an uploaded file',
+    description:
+      'Key must be owned by the authenticated user (prefixed with avatars/{userId}/ or uploads/{userId}/).',
+  })
   @ApiResponse({ status: 204, description: 'Deleted.' })
   @ApiResponse({ status: 403, description: 'Key does not belong to the authenticated user.' })
-  async deleteFile(
-    @Param('0') key: string,
-    @CurrentUser() user: JwtPayload,
-  ): Promise<void> {
-    const owned =
-      key.startsWith(`avatars/${user.sub}/`) ||
-      key.startsWith(`uploads/${user.sub}/`);
+  async deleteFile(@Param('0') key: string, @CurrentUser() user: JwtPayload): Promise<void> {
+    const owned = key.startsWith(`avatars/${user.sub}/`) || key.startsWith(`uploads/${user.sub}/`);
     if (!owned) {
       throw new ForbiddenException('You do not have permission to delete this file.');
     }

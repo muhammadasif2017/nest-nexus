@@ -1,10 +1,24 @@
 import {
-  Controller, Post, Delete, Param, Body, Req, Res, HttpCode, HttpStatus,
-  Get, UnauthorizedException,
+  Controller,
+  Post,
+  Delete,
+  Param,
+  Body,
+  Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+  Get,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
-  ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiCookieAuth, ApiBody,
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiCookieAuth,
+  ApiBody,
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
@@ -32,16 +46,17 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.CREATED)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
-  @ApiOperation({ summary: 'Register a new user', description: 'Creates account and returns JWT access token. Refresh token set as HttpOnly cookie.' })
+  @ApiOperation({
+    summary: 'Register a new user',
+    description:
+      'Creates account and returns JWT access token. Refresh token set as HttpOnly cookie.',
+  })
   @ApiBody({ type: RegisterInput })
   @ApiResponse({ status: 201, description: 'Registration successful.', type: AuthOutput })
   @ApiResponse({ status: 400, description: 'Validation failed.' })
   @ApiResponse({ status: 409, description: 'Email already in use.' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
-  async register(
-    @Body() dto: RegisterInput,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async register(@Body() dto: RegisterInput, @Res({ passthrough: true }) res: Response) {
     // passthrough: true on @Res() means NestJS still handles the response
     // serialization — we're just adding the cookie as a side effect.
     const { auth, refreshToken } = await this.authService.register(dto);
@@ -53,7 +68,10 @@ export class AuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
-  @ApiOperation({ summary: 'Login with email + password', description: 'Returns JWT access token. Refresh token set as HttpOnly cookie.' })
+  @ApiOperation({
+    summary: 'Login with email + password',
+    description: 'Returns JWT access token. Refresh token set as HttpOnly cookie.',
+  })
   @ApiBody({ type: LoginInput })
   @ApiResponse({ status: 200, description: 'Login successful.', type: AuthOutput })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
@@ -71,14 +89,15 @@ export class AuthController {
   @Post('refresh')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Rotate refresh token', description: 'Reads refresh token from HttpOnly cookie, issues new token pair. Old refresh token is revoked.' })
+  @ApiOperation({
+    summary: 'Rotate refresh token',
+    description:
+      'Reads refresh token from HttpOnly cookie, issues new token pair. Old refresh token is revoked.',
+  })
   @ApiCookieAuth('refresh-token')
   @ApiResponse({ status: 200, description: 'Tokens rotated.', type: AuthOutput })
   @ApiResponse({ status: 401, description: 'Missing or invalid refresh token.' })
-  async refresh(
-    @Req() req: Request,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const rawToken = req.cookies?.['refresh_token'];
     if (!rawToken) throw new UnauthorizedException('No refresh token found.');
     const { auth, refreshToken } = await this.authService.refresh(rawToken);
@@ -89,13 +108,13 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Logout', description: 'Revokes all refresh tokens for the authenticated user and clears the cookie.' })
+  @ApiOperation({
+    summary: 'Logout',
+    description: 'Revokes all refresh tokens for the authenticated user and clears the cookie.',
+  })
   @ApiResponse({ status: 204, description: 'Logged out.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
-  async logout(
-    @CurrentUser() user: JwtPayload,
-    @Res({ passthrough: true }) res: Response,
-  ) {
+  async logout(@CurrentUser() user: JwtPayload, @Res({ passthrough: true }) res: Response) {
     await this.authService.logout(user.sub);
     res.clearCookie('refresh_token', { path: '/api/v1/auth' });
     // 204 No Content — nothing to return after logout
@@ -103,7 +122,10 @@ export class AuthController {
 
   @Get('me')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Get current user', description: 'Returns the JWT payload of the authenticated user.' })
+  @ApiOperation({
+    summary: 'Get current user',
+    description: 'Returns the JWT payload of the authenticated user.',
+  })
   @ApiResponse({ status: 200, description: 'Current user payload.' })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   async getMe(@CurrentUser() user: JwtPayload) {
@@ -112,20 +134,30 @@ export class AuthController {
 
   @Get('sessions')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'List active device sessions', description: 'Returns one entry per device with an active (non-expired, non-revoked) refresh token.' })
+  @ApiOperation({
+    summary: 'List active device sessions',
+    description:
+      'Returns one entry per device with an active (non-expired, non-revoked) refresh token.',
+  })
   @ApiResponse({ status: 200, description: 'Active device sessions.', type: [DeviceSessionOutput] })
   async listSessions(
     @CurrentUser() user: JwtPayload,
     @Req() req: Request,
   ): Promise<DeviceSessionOutput[]> {
-    const currentDeviceId = await this.tokenService.getCurrentDeviceId(user.sub, req.cookies?.['refresh_token']);
+    const currentDeviceId = await this.tokenService.getCurrentDeviceId(
+      user.sub,
+      req.cookies?.['refresh_token'],
+    );
     return this.tokenService.listDeviceSessions(user.sub, currentDeviceId);
   }
 
   @Delete('sessions/:deviceId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Revoke a device session', description: 'Revokes all refresh tokens for the given deviceId, signing that device out.' })
+  @ApiOperation({
+    summary: 'Revoke a device session',
+    description: 'Revokes all refresh tokens for the given deviceId, signing that device out.',
+  })
   @ApiResponse({ status: 204, description: 'Device session revoked.' })
   async revokeSession(
     @CurrentUser() user: JwtPayload,

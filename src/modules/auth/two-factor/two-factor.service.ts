@@ -24,7 +24,9 @@ export class TwoFactorService {
     return this.config.get<string>('app.totpEncryptionKey')!;
   }
 
-  async setup(userId: string): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
+  async setup(
+    userId: string,
+  ): Promise<{ secret: string; otpauthUrl: string; qrCodeDataUrl: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { email: true },
@@ -37,7 +39,10 @@ export class TwoFactorService {
 
     // Store secret temporarily — 2FA is not active until enable() is called
     const encryptedSecret = encryptTotpSecret(secret, this.encryptionKey);
-    await this.prisma.user.update({ where: { id: userId }, data: { twoFactorSecret: encryptedSecret } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorSecret: encryptedSecret },
+    });
 
     return { secret, otpauthUrl, qrCodeDataUrl };
   }
@@ -56,7 +61,9 @@ export class TwoFactorService {
     }
 
     const backupCodes = this.generateBackupCodes();
-    const backupCodeHashes = backupCodes.map((c) => this.hashCode(userId, this.normalizeBackupCode(c)));
+    const backupCodeHashes = backupCodes.map((c) =>
+      this.hashCode(userId, this.normalizeBackupCode(c)),
+    );
 
     await this.prisma.user.update({
       where: { id: userId },
@@ -99,7 +106,10 @@ export class TwoFactorService {
 
     // Single-use: remove the matched backup code
     const updated = user.twoFactorBackupCodes.filter((c) => c !== hash);
-    await this.prisma.user.update({ where: { id: userId }, data: { twoFactorBackupCodes: updated } });
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { twoFactorBackupCodes: updated },
+    });
     return true;
   }
 

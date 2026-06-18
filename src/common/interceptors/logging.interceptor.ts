@@ -1,6 +1,4 @@
-import {
-  Injectable, NestInterceptor, ExecutionContext, CallHandler,
-} from '@nestjs/common';
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { Observable, tap } from 'rxjs';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';

@@ -30,10 +30,7 @@ const mockCallHandler = (data: unknown): CallHandler => ({
 
 const mockContext = {} as ExecutionContext;
 
-const intercept = async <T>(
-  dto: new () => T,
-  data: unknown,
-): Promise<T> => {
+const intercept = async <T>(dto: new () => T, data: unknown): Promise<T> => {
   const interceptor = new SerializeInterceptor(dto);
   const result$ = interceptor.intercept(mockContext, mockCallHandler(data));
   return firstValueFrom(result$);
@@ -52,7 +49,7 @@ describe('SerializeInterceptor', () => {
 
     it('strips fields without @Expose()', async () => {
       const data = { id: '1', email: 'a@test.com', password: 'secret' };
-      const result = await intercept(UserOutput, data) as any;
+      const result = (await intercept(UserOutput, data)) as any;
 
       expect(result.password).toBeUndefined();
     });
@@ -64,14 +61,14 @@ describe('SerializeInterceptor', () => {
         password: 'hash',
         refreshTokens: ['token1', 'token2'],
       };
-      const result = await intercept(UserOutput, data) as any;
+      const result = (await intercept(UserOutput, data)) as any;
 
       expect(result.refreshTokens).toBeUndefined();
     });
 
     it('strips extra fields not present in DTO at all', async () => {
       const data = { id: '1', email: 'a@test.com', unknownField: 'value' };
-      const result = await intercept(UserOutput, data) as any;
+      const result = (await intercept(UserOutput, data)) as any;
 
       expect(result.unknownField).toBeUndefined();
     });
@@ -98,7 +95,7 @@ describe('SerializeInterceptor', () => {
         bio: 'developer',
         internalNotes: 'flagged user',
       };
-      const result = await intercept(ProfileOutput, data) as any;
+      const result = (await intercept(ProfileOutput, data)) as any;
 
       expect(result.username).toBe('alice');
       expect(result.bio).toBe('developer');
@@ -120,7 +117,7 @@ describe('SerializeInterceptor', () => {
       instance.email = 'd@test.com';
       instance.password = 'should-be-stripped';
 
-      const result = await intercept(UserOutput, instance) as any;
+      const result = (await intercept(UserOutput, instance)) as any;
 
       expect(result.id).toBe('99');
       expect(result.password).toBeUndefined();
@@ -131,7 +128,7 @@ describe('SerializeInterceptor', () => {
         { id: '1', email: 'x@test.com', password: 'p1' },
         { id: '2', email: 'y@test.com', password: 'p2' },
       ];
-      const result = await intercept(UserOutput, data) as unknown as any[];
+      const result = (await intercept(UserOutput, data)) as unknown as any[];
 
       expect(result).toHaveLength(2);
       expect(result[0].password).toBeUndefined();
@@ -153,7 +150,10 @@ describe('SerializeInterceptor', () => {
   describe('observable pipeline', () => {
     it('returns an Observable', () => {
       const interceptor = new SerializeInterceptor(UserOutput);
-      const result$ = interceptor.intercept(mockContext, mockCallHandler({ id: '1', email: 'e@test.com' }));
+      const result$ = interceptor.intercept(
+        mockContext,
+        mockCallHandler({ id: '1', email: 'e@test.com' }),
+      );
 
       expect(result$).toBeDefined();
       expect(typeof result$.pipe).toBe('function');

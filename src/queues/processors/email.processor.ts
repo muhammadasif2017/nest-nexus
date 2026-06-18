@@ -91,7 +91,9 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
   }
 
   private async sendTwoFactorCode(data: TwoFactorCodeData): Promise<void> {
-    this.logger.log(`[STUB] 2FA code email → ${data.to}, code expires in ${data.expiresInMinutes}m`);
+    this.logger.log(
+      `[STUB] 2FA code email → ${data.to}, code expires in ${data.expiresInMinutes}m`,
+    );
   }
 
   private async sendMagicLink(data: MagicLinkEmailData): Promise<void> {

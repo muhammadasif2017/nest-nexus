@@ -64,7 +64,10 @@ describe('NotificationService', () => {
       const client2 = collectEvents(service, 'user-1');
       service.sendToUser('user-1', 'notify', { msg: 'hi' });
       expect(client1.received).toEqual(client2.received);
-      expect(client1.received[0]).toMatchObject({ type: 'notify', data: expect.objectContaining({ type: 'notify' }) });
+      expect(client1.received[0]).toMatchObject({
+        type: 'notify',
+        data: expect.objectContaining({ type: 'notify' }),
+      });
     });
 
     it('does not deliver to clients subscribed for a different user', () => {

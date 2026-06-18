@@ -1,6 +1,11 @@
 import {
-  ExceptionFilter, Catch, ArgumentsHost, HttpException,
-  HttpStatus, Logger, Injectable,
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+  Logger,
+  Injectable,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GqlExceptionFilter } from '@nestjs/graphql';
@@ -42,7 +47,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
     const contextType = host.getType<string>();
 
     if (contextType === 'graphql') {
-      return this.handleGraphQLError(exception, host);
+      return this.handleGraphQLError(exception);
     }
 
     // Default: treat as HTTP (covers 'http' and unknown contexts)
@@ -52,7 +57,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
   // ── GraphQL Error Handler ──────────────────────────────────────────────────
   // In GraphQL, we don't touch the HTTP response. Instead, we return a
   // GraphQLError object. Apollo will wrap it in the `errors` array automatically.
-  private handleGraphQLError(exception: unknown, host: ArgumentsHost): GraphQLError {
+  private handleGraphQLError(exception: unknown): GraphQLError {
     const { message, code, statusCode } = this.normalizeException(exception);
     const isInternal = this.isInternalError(statusCode);
 
@@ -113,9 +118,10 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       path: request.url,
       timestamp: new Date().toISOString(),
       // In development, include the stack trace so you can debug without logs
-      ...(this.isDev && isInternal && {
-        stack: exception instanceof Error ? exception.stack : undefined,
-      }),
+      ...(this.isDev &&
+        isInternal && {
+          stack: exception instanceof Error ? exception.stack : undefined,
+        }),
     });
   }
 
@@ -136,15 +142,13 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
       const message =
         typeof exceptionResponse === 'string'
           ? exceptionResponse
-          : (exceptionResponse as any)?.message ?? exception.message;
+          : ((exceptionResponse as any)?.message ?? exception.message);
 
       // Map HTTP status codes to our semantic error codes
       const code = this.statusToErrorCode(status);
 
       // ValidationPipe returns an array of messages — join them for readability
-      const normalizedMessage = Array.isArray(message)
-        ? message.join('; ')
-        : message;
+      const normalizedMessage = Array.isArray(message) ? message.join('; ') : message;
 
       return { message: normalizedMessage, code, statusCode: status };
     }
@@ -174,8 +178,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
     // ── Unknown/Unhandled Exceptions ───────────────────────────────────────
     // This is the safety net. We intentionally return a generic message to
     // avoid leaking any implementation details about the crash.
-    const message =
-      exception instanceof Error ? exception.message : 'Unknown error';
+    const message = exception instanceof Error ? exception.message : 'Unknown error';
 
     this.logger.error('Unhandled exception', exception);
 

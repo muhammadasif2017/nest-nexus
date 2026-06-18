@@ -20,7 +20,8 @@ export class NotificationController {
   @ApiBearerAuth('access-token')
   @ApiOperation({
     summary: 'Subscribe to real-time notifications (SSE)',
-    description: 'Long-lived connection. Events are pushed as they occur. Reconnect with `Last-Event-ID` header to resume.',
+    description:
+      'Long-lived connection. Events are pushed as they occur. Reconnect with `Last-Event-ID` header to resume.',
   })
   stream(@CurrentUser() user: JwtPayload): Observable<MessageEvent> {
     return this.notificationService.subscribeSSE(user.sub);

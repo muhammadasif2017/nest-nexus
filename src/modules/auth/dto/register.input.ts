@@ -1,8 +1,6 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsEmail, IsString, MinLength, MaxLength, Matches,
-} from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, Matches } from 'class-validator';
 
 @InputType()
 export class RegisterInput {
@@ -14,7 +12,8 @@ export class RegisterInput {
   @Field()
   @ApiProperty({ example: 'John Doe', minLength: 2, maxLength: 100 })
   @IsString()
-  @MinLength(2) @MaxLength(100)
+  @MinLength(2)
+  @MaxLength(100)
   displayName!: string;
 
   @Field()

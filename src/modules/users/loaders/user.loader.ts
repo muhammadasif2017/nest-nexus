@@ -4,9 +4,16 @@ import DataLoader from 'dataloader';
 import { PrismaService } from '../../../prisma/prisma.service';
 
 const USER_SELECT = {
-  id: true, email: true, displayName: true, roles: true,
-  isEmailVerified: true, isActive: true, avatarUrl: true,
-  lastLoginAt: true, createdAt: true, updatedAt: true,
+  id: true,
+  email: true,
+  displayName: true,
+  roles: true,
+  isEmailVerified: true,
+  isActive: true,
+  avatarUrl: true,
+  lastLoginAt: true,
+  createdAt: true,
+  updatedAt: true,
 } as const;
 
 export type LoadedUser = Prisma.UserGetPayload<{ select: typeof USER_SELECT }>;

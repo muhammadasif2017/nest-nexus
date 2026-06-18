@@ -41,7 +41,11 @@ const makeController = () => {
   const authService = makeAuthServiceMock();
   const tokenService = makeTokenServiceMock();
   const twoFactorService = makeTwoFactorServiceMock();
-  const controller = new TwoFactorController(authService as any, tokenService as any, twoFactorService as any);
+  const controller = new TwoFactorController(
+    authService as any,
+    tokenService as any,
+    twoFactorService as any,
+  );
   return { controller, authService, tokenService, twoFactorService };
 };
 
@@ -50,7 +54,12 @@ describe('TwoFactorController', () => {
 
   describe('verify()', () => {
     const dto: TwoFactorCodeInput = { code: '123456' };
-    const user: JwtPayload = { sub: 'user-id-1', email: 'user@test.com', roles: ['user'], scope: 'two_factor_pending' };
+    const user: JwtPayload = {
+      sub: 'user-id-1',
+      email: 'user@test.com',
+      roles: ['user'],
+      scope: 'two_factor_pending',
+    };
 
     it('throws UnauthorizedException when the code is invalid', async () => {
       const { controller, twoFactorService } = makeController();

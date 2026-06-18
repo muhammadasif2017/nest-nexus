@@ -44,14 +44,12 @@ describe('StorageService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { __mockSend } = require('@aws-sdk/client-s3');
     mockSend = __mockSend;
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        StorageService,
-        { provide: ConfigService, useValue: mockConfig() },
-      ],
+      providers: [StorageService, { provide: ConfigService, useValue: mockConfig() }],
     }).compile();
     service = module.get(StorageService);
   });
@@ -63,9 +61,7 @@ describe('StorageService', () => {
     });
 
     it('creates bucket when HeadBucket fails', async () => {
-      mockSend
-        .mockRejectedValueOnce(new Error('NoSuchBucket'))
-        .mockResolvedValueOnce({}); // CreateBucket success
+      mockSend.mockRejectedValueOnce(new Error('NoSuchBucket')).mockResolvedValueOnce({}); // CreateBucket success
       await expect(service.onModuleInit()).resolves.toBeUndefined();
       expect(mockSend).toHaveBeenCalledTimes(2);
     });
@@ -81,6 +77,7 @@ describe('StorageService', () => {
   describe('onModuleDestroy', () => {
     it('destroys the S3 client', () => {
       service.onModuleDestroy();
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { S3Client } = require('@aws-sdk/client-s3');
       const instance = S3Client.mock.results[0].value;
       expect(instance.destroy).toHaveBeenCalled();

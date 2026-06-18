@@ -25,7 +25,10 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
 
     TOTP_ENCRYPTION_KEY: z
       .string()
-      .regex(/^[0-9a-fA-F]{64}$/, 'TOTP_ENCRYPTION_KEY must be exactly 64 hex chars (32 bytes for AES-256)'),
+      .regex(
+        /^[0-9a-fA-F]{64}$/,
+        'TOTP_ENCRYPTION_KEY must be exactly 64 hex chars (32 bytes for AES-256)',
+      ),
 
     QUEUE_EMAIL_CONCURRENCY: z.coerce.number().min(1).max(50).default(5),
   });

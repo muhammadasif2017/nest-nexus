@@ -40,10 +40,7 @@ export class DeadLetterService {
         });
       } catch (webhookErr) {
         // Swallow webhook errors — job failure is already logged above
-        this.logger.warn(
-          { err: webhookErr },
-          'Dead-letter webhook delivery failed',
-        );
+        this.logger.warn({ err: webhookErr }, 'Dead-letter webhook delivery failed');
       }
     }
   }

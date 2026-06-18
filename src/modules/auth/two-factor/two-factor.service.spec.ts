@@ -134,7 +134,11 @@ describe('TwoFactorService', () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue({ email: 'user@test.com' });
       await service.setup('user-id');
-      expect(mockAuthenticator.keyuri).toHaveBeenCalledWith('user@test.com', 'Nexus', 'MOCK_TOTP_SECRET');
+      expect(mockAuthenticator.keyuri).toHaveBeenCalledWith(
+        'user@test.com',
+        'Nexus',
+        'MOCK_TOTP_SECRET',
+      );
     });
 
     it('qrCodeDataUrl starts with data:', async () => {
@@ -225,7 +229,10 @@ describe('TwoFactorService', () => {
       // verify() strips dashes and uppercases before hashing — enable() must do the same
       const crypto = await import('crypto');
       const strippedCode = codes[0].replace(/-/g, '').toUpperCase();
-      const expectedHash = crypto.createHash('sha256').update('user-id:' + strippedCode).digest('hex');
+      const expectedHash = crypto
+        .createHash('sha256')
+        .update('user-id:' + strippedCode)
+        .digest('hex');
       expect(storedHash).toBe(expectedHash);
     });
   });
@@ -312,7 +319,10 @@ describe('TwoFactorService', () => {
       const { service, prisma } = makeService();
       const crypto = await import('crypto');
       const code = 'ABCD1234';
-      const hash = crypto.createHash('sha256').update('user-id:' + code).digest('hex');
+      const hash = crypto
+        .createHash('sha256')
+        .update('user-id:' + code)
+        .digest('hex');
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [hash] }),
       );
@@ -325,7 +335,10 @@ describe('TwoFactorService', () => {
       const { service, prisma } = makeService();
       const crypto = await import('crypto');
       const code = 'ABCD1234';
-      const hash = crypto.createHash('sha256').update('user-id:' + code).digest('hex');
+      const hash = crypto
+        .createHash('sha256')
+        .update('user-id:' + code)
+        .digest('hex');
       const otherHash = 'other-hash-value';
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [hash, otherHash] }),

@@ -1,4 +1,12 @@
-import { Controller, Post, Body, Res, HttpCode, HttpStatus, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  Res,
+  HttpCode,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthService } from '../auth.service';
@@ -21,7 +29,11 @@ export class TwoFactorController {
 
   @Post('setup')
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Generate TOTP secret + QR code', description: 'Returns secret and data URL for a QR code to scan with an authenticator app. Call enable to activate.' })
+  @ApiOperation({
+    summary: 'Generate TOTP secret + QR code',
+    description:
+      'Returns secret and data URL for a QR code to scan with an authenticator app. Call enable to activate.',
+  })
   @ApiResponse({ status: 200, description: 'Setup data returned.' })
   async setup(@CurrentUser() user: JwtPayload) {
     return this.twoFactorService.setup(user.sub);
@@ -30,7 +42,10 @@ export class TwoFactorController {
   @Post('enable')
   @ApiBearerAuth('access-token')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Enable 2FA (verify TOTP code)', description: 'Returns 10 single-use backup codes. Save them — they are shown only once.' })
+  @ApiOperation({
+    summary: 'Enable 2FA (verify TOTP code)',
+    description: 'Returns 10 single-use backup codes. Save them — they are shown only once.',
+  })
   @ApiBody({ type: TwoFactorCodeInput })
   @ApiResponse({ status: 200, description: 'Backup codes returned.' })
   @ApiResponse({ status: 401, description: 'Invalid TOTP code.' })
@@ -42,7 +57,10 @@ export class TwoFactorController {
   @Post('disable')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiBearerAuth('access-token')
-  @ApiOperation({ summary: 'Disable 2FA', description: 'Requires a valid TOTP code to prevent accidental or unauthorized disabling.' })
+  @ApiOperation({
+    summary: 'Disable 2FA',
+    description: 'Requires a valid TOTP code to prevent accidental or unauthorized disabling.',
+  })
   @ApiBody({ type: TwoFactorCodeInput })
   @ApiResponse({ status: 204, description: '2FA disabled.' })
   @ApiResponse({ status: 401, description: 'Invalid TOTP code.' })
@@ -53,7 +71,11 @@ export class TwoFactorController {
   @Post('verify')
   @AllowPending2FA()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Complete 2FA login', description: 'Exchanges a pending-2FA access token + TOTP code for a full access token. Refresh token set as HttpOnly cookie.' })
+  @ApiOperation({
+    summary: 'Complete 2FA login',
+    description:
+      'Exchanges a pending-2FA access token + TOTP code for a full access token. Refresh token set as HttpOnly cookie.',
+  })
   @ApiBearerAuth('access-token')
   @ApiBody({ type: TwoFactorCodeInput })
   @ApiResponse({ status: 200, description: 'Full access token issued.', type: AuthOutput })

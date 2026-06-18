@@ -1,6 +1,10 @@
 import {
-  Injectable, UnauthorizedException, ConflictException,
-  ForbiddenException, NotFoundException, Logger,
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
@@ -16,11 +20,19 @@ import { User, Prisma } from '@prisma/client';
 import { OAuthProfile } from './oauth/strategies/google.strategy';
 import { parseExpiryDate } from '../../common/utils/duration.util';
 
-type UserForAuth = Pick<User,
-  'id' | 'email' | 'displayName' | 'roles' |
-  'isEmailVerified' | 'isActive' | 'avatarUrl' |
-  'lastLoginAt' | 'createdAt' | 'updatedAt' |
-  'isTwoFactorEnabled'
+type UserForAuth = Pick<
+  User,
+  | 'id'
+  | 'email'
+  | 'displayName'
+  | 'roles'
+  | 'isEmailVerified'
+  | 'isActive'
+  | 'avatarUrl'
+  | 'lastLoginAt'
+  | 'createdAt'
+  | 'updatedAt'
+  | 'isTwoFactorEnabled'
 >;
 
 @Injectable()
@@ -95,9 +107,16 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
-        id: true, email: true, displayName: true, roles: true,
-        isEmailVerified: true, isActive: true, avatarUrl: true,
-        lastLoginAt: true, createdAt: true, updatedAt: true,
+        id: true,
+        email: true,
+        displayName: true,
+        roles: true,
+        isEmailVerified: true,
+        isActive: true,
+        avatarUrl: true,
+        lastLoginAt: true,
+        createdAt: true,
+        updatedAt: true,
         isTwoFactorEnabled: true,
       },
     });
@@ -110,13 +129,22 @@ export class AuthService {
     let user: UserForAuth | null = null;
 
     const existing = await this.prisma.oauthProvider.findUnique({
-      where: { provider_providerId: { provider: profile.provider, providerId: profile.providerId } },
+      where: {
+        provider_providerId: { provider: profile.provider, providerId: profile.providerId },
+      },
       select: {
         user: {
           select: {
-            id: true, email: true, displayName: true, roles: true,
-            isEmailVerified: true, isActive: true, avatarUrl: true,
-            lastLoginAt: true, createdAt: true, updatedAt: true,
+            id: true,
+            email: true,
+            displayName: true,
+            roles: true,
+            isEmailVerified: true,
+            isActive: true,
+            avatarUrl: true,
+            lastLoginAt: true,
+            createdAt: true,
+            updatedAt: true,
             isTwoFactorEnabled: true,
           },
         },
@@ -133,15 +161,31 @@ export class AuthService {
           data: {
             oauthProviders: {
               connectOrCreate: {
-                where: { provider_providerId: { provider: profile.provider, providerId: profile.providerId } },
-                create: { provider: profile.provider, providerId: profile.providerId, providerEmail: profile.email },
+                where: {
+                  provider_providerId: {
+                    provider: profile.provider,
+                    providerId: profile.providerId,
+                  },
+                },
+                create: {
+                  provider: profile.provider,
+                  providerId: profile.providerId,
+                  providerEmail: profile.email,
+                },
               },
             },
           },
           select: {
-            id: true, email: true, displayName: true, roles: true,
-            isEmailVerified: true, isActive: true, avatarUrl: true,
-            lastLoginAt: true, createdAt: true, updatedAt: true,
+            id: true,
+            email: true,
+            displayName: true,
+            roles: true,
+            isEmailVerified: true,
+            isActive: true,
+            avatarUrl: true,
+            lastLoginAt: true,
+            createdAt: true,
+            updatedAt: true,
             isTwoFactorEnabled: true,
           },
         });
@@ -159,7 +203,9 @@ export class AuthService {
       try {
         user = await this.prisma.user.create({
           data: {
-            email: (profile.email ?? `${profile.providerId}@${profile.provider}.oauth`).toLowerCase(),
+            email: (
+              profile.email ?? `${profile.providerId}@${profile.provider}.oauth`
+            ).toLowerCase(),
             displayName: profile.displayName,
             hasPassword: false,
             lastLoginAt: new Date(),
@@ -174,7 +220,9 @@ export class AuthService {
         });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-          throw new ConflictException('An account with this email already exists. Please log in and link your OAuth provider.');
+          throw new ConflictException(
+            'An account with this email already exists. Please log in and link your OAuth provider.',
+          );
         }
         throw e;
       }
@@ -198,17 +246,25 @@ export class AuthService {
     auth: Omit<AuthOutput, 'user'> & { user?: UserOutput };
     refreshToken: string;
   }> {
-    const { accessToken, refreshToken } = await this.tokenService.rotateRefreshToken(rawRefreshToken);
+    const { accessToken, refreshToken } =
+      await this.tokenService.rotateRefreshToken(rawRefreshToken);
     const expiresIn = this.config.get<string>('jwt.expiresIn') ?? '15m';
     const expiresAt = parseExpiryDate(expiresIn, 15 * 60 * 1000);
     return { auth: { accessToken, accessTokenExpiresAt: expiresAt } as any, refreshToken };
   }
 
-  private buildPendingTwoFactorResponse(user: UserForAuth): { auth: AuthOutput; refreshToken: string } {
+  private buildPendingTwoFactorResponse(user: UserForAuth): {
+    auth: AuthOutput;
+    refreshToken: string;
+  } {
     const pendingToken = this.tokenService.generatePendingTwoFactorToken(user);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
     return {
-      auth: { accessToken: pendingToken, isTwoFactorPending: true, accessTokenExpiresAt: expiresAt } as any,
+      auth: {
+        accessToken: pendingToken,
+        isTwoFactorPending: true,
+        accessTokenExpiresAt: expiresAt,
+      } as any,
       refreshToken: '',
     };
   }

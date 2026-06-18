@@ -16,7 +16,10 @@ export class SessionAuthController {
   @Public()
   @HttpCode(HttpStatus.OK)
   @Throttle({ strict: { limit: 5, ttl: 600_000 } })
-  @ApiOperation({ summary: 'Session-based login', description: 'For traditional web clients. Sets HttpOnly session cookie — no tokens returned.' })
+  @ApiOperation({
+    summary: 'Session-based login',
+    description: 'For traditional web clients. Sets HttpOnly session cookie — no tokens returned.',
+  })
   @ApiBody({ type: SessionLoginInput })
   @ApiResponse({ status: 200, description: 'Session created.' })
   @ApiResponse({ status: 401, description: 'Invalid credentials.' })
@@ -57,7 +60,10 @@ export class SessionAuthController {
   @Post('logout')
   @UseGuards(SessionGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Session-based logout', description: 'Destroys the server-side session.' })
+  @ApiOperation({
+    summary: 'Session-based logout',
+    description: 'Destroys the server-side session.',
+  })
   @ApiResponse({ status: 204, description: 'Session destroyed.' })
   @ApiResponse({ status: 401, description: 'No active session.' })
   async logout(@Req() req: Request) {

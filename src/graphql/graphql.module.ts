@@ -46,7 +46,7 @@ import jwt from 'jsonwebtoken';
           plugins: isDev
             ? [
                 ApolloServerPluginLandingPageLocalDefault(), // Apollo Sandbox in dev
-                ApolloServerPluginInlineTrace(),             // Enables Apollo Studio tracing
+                ApolloServerPluginInlineTrace(), // Enables Apollo Studio tracing
               ]
             : [],
 
@@ -94,7 +94,8 @@ import jwt from 'jsonwebtoken';
             if (isDev) return formattedError;
 
             // Strip stacktrace in production — never expose internals to clients
-            const { stacktrace, ...safeExtensions } = formattedError.extensions ?? {};
+            const safeExtensions = { ...formattedError.extensions };
+            delete safeExtensions.stacktrace;
             return { ...formattedError, extensions: safeExtensions };
           },
         };

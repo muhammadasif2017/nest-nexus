@@ -63,7 +63,9 @@ describe('OAuthController', () => {
       expect(authService.oauthLogin).toHaveBeenCalledWith(req.user);
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(config.get).toHaveBeenCalledWith('app.clientOrigin');
-      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3000/oauth/success#token=access-token');
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/oauth/success#token=access-token',
+      );
     });
   });
 
@@ -75,7 +77,9 @@ describe('OAuthController', () => {
       await controller.githubCallback(req as any, res as any);
       expect(authService.oauthLogin).toHaveBeenCalledWith(req.user);
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
-      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3000/oauth/success#token=access-token');
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/oauth/success#token=access-token',
+      );
     });
   });
 });
