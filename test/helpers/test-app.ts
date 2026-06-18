@@ -2,10 +2,10 @@ import { Test } from '@nestjs/testing';
 import {
   ClassSerializerInterceptor,
   INestApplication,
-  Reflector,
   ValidationPipe,
   VersioningType,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
