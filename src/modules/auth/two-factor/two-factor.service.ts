@@ -9,7 +9,7 @@ import { authenticator } from 'otplib';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/prisma/prisma.service';
 import { encryptTotpSecret, decryptTotpSecret } from '../../../common/crypto/totp-crypto.util';
 import { sha256Hex } from '../../../common/crypto/hash.util';
 

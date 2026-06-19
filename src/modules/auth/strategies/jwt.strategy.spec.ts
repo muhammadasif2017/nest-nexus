@@ -1,7 +1,7 @@
 import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtStrategy, JwtPayload } from './jwt.strategy';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/prisma/prisma.service';
 
 const makeConfigMock = () => ({
   get: jest.fn().mockReturnValue('test-secret'),

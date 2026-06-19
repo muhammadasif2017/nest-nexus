@@ -10,7 +10,7 @@ import * as bcrypt from 'bcrypt';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma } from '@prisma/client';
 import { AuthService } from './auth.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { RegisterInput } from './dto/register.input';
 import { LoginInput } from './dto/login.input';
 

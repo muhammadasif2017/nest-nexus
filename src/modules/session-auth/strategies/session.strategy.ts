@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PassportSerializer } from '@nestjs/passport';
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/prisma/prisma.service';
 
 // PassportSerializer hooks into passport.serializeUser / passport.deserializeUser.
 // serializeUser: decides what to store in the session (just the ID — minimal surface area)

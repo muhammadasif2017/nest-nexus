@@ -17,22 +17,22 @@ import storageConfig from './config/storage.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
 // Infrastructure modules
-import { PrismaModule } from './prisma/prisma.module';
-import { RedisModule } from './redis/redis.module';
-import { CacheModule } from './cache/cache.module';
+import { PrismaModule } from './core/prisma/prisma.module';
+import { RedisModule } from './core/redis/redis.module';
+import { CacheModule } from './core/cache/cache.module';
 import { LoggerModule } from './logger/logger.module';
-import { QueuesModule } from './queues/queues.module';
+import { QueuesModule } from './core/queues/queues.module';
 import { EventsModule } from './events/events.module';
-import { SchedulerModule } from './scheduler/scheduler.module';
-import { HealthModule } from './health/health.module';
-import { MetricsModule } from './metrics/metrics.module';
+import { SchedulerModule } from './core/scheduler/scheduler.module';
+import { HealthModule } from './core/health/health.module';
+import { MetricsModule } from './core/metrics/metrics.module';
 
 // Feature modules (one per domain)
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
 import { NotificationsModule } from './modules/notifications/notification.module';
-import { StorageModule } from './storage/storage.module';
+import { StorageModule } from './core/storage/storage.module';
 import { GraphQLConfigModule } from './graphql/graphql.module';
 
 @Module({

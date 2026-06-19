@@ -1,4 +1,4 @@
-import { PrismaService } from '../../../prisma/prisma.service';
+import { PrismaService } from '../../../core/prisma/prisma.service';
 import { UserLoader } from './user.loader';
 
 const makePrismaMock = () => ({

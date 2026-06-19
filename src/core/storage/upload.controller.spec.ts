@@ -3,7 +3,7 @@ import { UploadController } from './upload.controller';
 import { StorageService } from './storage.service';
 import { ImageService } from './image.service';
 import { ClamAvService } from './clamav.service';
-import { JwtPayload } from '../modules/auth/strategies/jwt.strategy';
+import { JwtPayload } from '../../modules/auth/strategies/jwt.strategy';
 
 const makeStorageMock = () => ({
   upload: jest.fn().mockResolvedValue('https://cdn.example.com/key'),

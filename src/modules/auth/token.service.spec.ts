@@ -4,7 +4,7 @@ import { UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { TokenService } from './token.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 
 // ── Hash helpers — mirrors TokenService.hashRefreshToken (SHA-256) ────────────
 const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');

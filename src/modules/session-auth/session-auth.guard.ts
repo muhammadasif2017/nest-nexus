@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from
 import { GqlExecutionContext } from '@nestjs/graphql';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Request } from 'express';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 
 interface CachedSessionUser {
   id: string;
