@@ -18,6 +18,13 @@ export class RedisClientService implements OnModuleDestroy {
   }
 
   async onModuleDestroy(): Promise<void> {
+    // lazyConnect means the client may never have connected (e.g. a request path
+    // that never touched Redis) — quit() on an unconnected client throws because
+    // enableOfflineQueue is false. disconnect() is safe to call in any state.
+    if (this.client.status === 'wait' || this.client.status === 'end') {
+      this.client.disconnect();
+      return;
+    }
     await this.client.quit();
   }
 }
