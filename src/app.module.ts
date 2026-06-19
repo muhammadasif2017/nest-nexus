@@ -20,9 +20,9 @@ import { configValidationSchema } from './config/config.validation'; // Zod sche
 import { PrismaModule } from './core/prisma/prisma.module';
 import { RedisModule } from './core/redis/redis.module';
 import { CacheModule } from './core/cache/cache.module';
-import { LoggerModule } from './logger/logger.module';
+import { LoggerModule } from './core/logger/logger.module';
 import { QueuesModule } from './core/queues/queues.module';
-import { EventsModule } from './events/events.module';
+import { EventsModule } from './core/events/events.module';
 import { SchedulerModule } from './core/scheduler/scheduler.module';
 import { HealthModule } from './core/health/health.module';
 import { MetricsModule } from './core/metrics/metrics.module';
