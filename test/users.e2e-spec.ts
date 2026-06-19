@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp, resetDb } from './helpers/test-app';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaService } from '../src/core/prisma/prisma.service';
 
 // Users CRUD lives in GraphQL, not REST, per CLAUDE.md (domain CRUD -> GraphQL).
 // All requests go through POST /graphql.

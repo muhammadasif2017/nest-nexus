@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp, resetDb } from './helpers/test-app';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaService } from '../src/core/prisma/prisma.service';
 
 describe('Health (e2e)', () => {
   let app: INestApplication;

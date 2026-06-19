@@ -1,7 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { createTestApp, resetDb } from './helpers/test-app';
-import { PrismaService } from '../src/prisma/prisma.service';
+import { PrismaService } from '../src/core/prisma/prisma.service';
 
 // register + login are rate-limited (5 per 10 min per IP — see AuthController @Throttle).
 // All tests share one registered user and re-login for fresh tokens instead of

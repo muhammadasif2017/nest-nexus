@@ -9,7 +9,7 @@ import { Reflector } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from '../../src/app.module';
-import { PrismaService } from '../../src/prisma/prisma.service';
+import { PrismaService } from '../../src/core/prisma/prisma.service';
 
 // Mirrors the request pipeline wired in src/main.ts (validation, serialization,
 // cookie parsing, helmet, CORS) minus dev-only wiring (Swagger, Bull Board) and
