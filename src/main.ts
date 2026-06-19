@@ -14,7 +14,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { QUEUE_EMAIL } from './queues/queues.constants';
+import { QUEUE_EMAIL } from './core/queues/queues.constants';
 
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';

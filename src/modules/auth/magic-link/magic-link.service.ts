@@ -5,9 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import crypto from 'crypto';
 import { sha256Hex } from '../../../common/crypto/hash.util';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { QUEUE_EMAIL, EmailJobName } from '../../../queues/queues.constants';
-import { MagicLinkEmailData } from '../../../queues/dto/email.job.dto';
+import { PrismaService } from '../../../core/prisma/prisma.service';
+import { QUEUE_EMAIL, EmailJobName } from '../../../core/queues/queues.constants';
+import { MagicLinkEmailData } from '../../../core/queues/dto/email.job.dto';
 
 const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 

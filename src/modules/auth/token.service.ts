@@ -5,7 +5,7 @@ import { RefreshToken } from '@prisma/client';
 import crypto from 'crypto';
 import { sha256Hex } from '../../common/crypto/hash.util';
 import { parseExpiryDate } from '../../common/utils/duration.util';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { JwtPayload } from './strategies/jwt.strategy';
 import { DeviceSessionOutput } from './dto/device-session.output';
 

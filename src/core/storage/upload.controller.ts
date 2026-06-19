@@ -26,9 +26,9 @@ import crypto from 'crypto';
 import { StorageService } from './storage.service';
 import { ImageService } from './image.service';
 import { ClamAvService } from './clamav.service';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { JwtPayload } from '../modules/auth/strategies/jwt.strategy';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { JwtPayload } from '../../modules/auth/strategies/jwt.strategy';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 MB

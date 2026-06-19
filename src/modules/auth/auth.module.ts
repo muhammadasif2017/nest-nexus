@@ -20,7 +20,7 @@ import { TwoFactorService } from './two-factor/two-factor.service';
 import { MagicLinkController } from './magic-link/magic-link.controller';
 import { MagicLinkService } from './magic-link/magic-link.service';
 
-import { QueuesModule } from '../../queues/queues.module';
+import { QueuesModule } from '../../core/queues/queues.module';
 
 @Module({
   imports: [

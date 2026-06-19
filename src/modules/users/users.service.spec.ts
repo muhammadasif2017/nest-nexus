@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { UsersService } from './users.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { UpdateUserInput } from './dto/update-user.input';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 

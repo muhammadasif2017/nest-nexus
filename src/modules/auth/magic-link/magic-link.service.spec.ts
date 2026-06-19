@@ -3,8 +3,8 @@ import { UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
 import { MagicLinkService } from './magic-link.service';
-import { PrismaService } from '../../../prisma/prisma.service';
-import { EmailJobName } from '../../../queues/queues.constants';
+import { PrismaService } from '../../../core/prisma/prisma.service';
+import { EmailJobName } from '../../../core/queues/queues.constants';
 
 // ── crypto mock — deterministic token ────────────────────────────────────────
 // jest.mock is hoisted before variable declarations, so the buffer must be

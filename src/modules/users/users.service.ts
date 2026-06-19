@@ -4,7 +4,7 @@ import { plainToInstance } from 'class-transformer';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { UserLoader } from './loaders/user.loader';
 import { UpdateUserInput } from './dto/update-user.input';
 import { UserOutput } from './dto/user.output';

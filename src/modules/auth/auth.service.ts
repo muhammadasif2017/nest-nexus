@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
-import { PrismaService } from '../../prisma/prisma.service';
+import { PrismaService } from '../../core/prisma/prisma.service';
 import { UserOutput } from '../users/dto/user.output';
 import { TokenService } from './token.service';
 import { RegisterInput } from './dto/register.input';
