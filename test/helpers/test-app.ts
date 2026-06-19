@@ -7,12 +7,13 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { AppModule } from '../../src/app.module';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
 // Mirrors the request pipeline wired in src/main.ts (validation, serialization,
-// cookie parsing) minus dev-only wiring (Swagger, Bull Board) and infra that
-// doesn't affect HTTP-level assertions (CORS, helmet, sessions, CSRF, websockets).
+// cookie parsing, helmet, CORS) minus dev-only wiring (Swagger, Bull Board) and
+// infra not needed for these HTTP-level assertions (sessions, CSRF, websockets).
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -20,6 +21,8 @@ export async function createTestApp(): Promise<INestApplication> {
 
   const app = moduleRef.createNestApplication();
 
+  app.enableCors({ origin: true, credentials: true });
+  app.use(helmet());
   app.use(cookieParser());
 
   app.useGlobalPipes(

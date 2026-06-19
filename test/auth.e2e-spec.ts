@@ -44,6 +44,20 @@ describe('Auth (e2e)', () => {
     await request(app.getHttpServer()).post('/api/v1/auth/register').send(credentials).expect(409);
   });
 
+  it('POST /api/v1/auth/register with an invalid email format returns 400', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ ...credentials, email: 'not-an-email' })
+      .expect(400);
+  });
+
+  it('POST /api/v1/auth/register with an unrecognized field returns 400 (whitelist rejection)', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/register')
+      .send({ ...credentials, email: 'e2e-auth-3@test.com', isAdmin: true })
+      .expect(400);
+  });
+
   it('POST /api/v1/auth/login returns access token + refresh cookie for valid credentials', async () => {
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
@@ -103,5 +117,12 @@ describe('Auth (e2e)', () => {
 
   it('POST /api/v1/auth/logout without a bearer token returns 401', async () => {
     await request(app.getHttpServer()).post('/api/v1/auth/logout').expect(401);
+  });
+
+  it('POST /api/v1/auth/logout with a malformed bearer token returns 401', async () => {
+    await request(app.getHttpServer())
+      .post('/api/v1/auth/logout')
+      .set('Authorization', 'Bearer not-a-real-jwt')
+      .expect(401);
   });
 });

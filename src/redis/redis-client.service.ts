@@ -1,9 +1,9 @@
-import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
 @Injectable()
-export class RedisClientService implements OnModuleDestroy {
+export class RedisClientService implements OnModuleInit, OnModuleDestroy {
   readonly client: Redis;
 
   constructor(config: ConfigService) {
@@ -15,6 +15,15 @@ export class RedisClientService implements OnModuleDestroy {
       maxRetriesPerRequest: 3,
       enableOfflineQueue: false,
     });
+  }
+
+  // lazyConnect + enableOfflineQueue:false means the connection only opens on the
+  // first command, and that command isn't queued while connecting — so without
+  // this, the very first Redis-touching request after startup can race the
+  // socket open and fail with "Stream isn't writeable". Connecting during Nest's
+  // own startup phase closes that window.
+  async onModuleInit(): Promise<void> {
+    await this.client.connect();
   }
 
   async onModuleDestroy(): Promise<void> {

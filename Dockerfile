@@ -10,6 +10,8 @@ RUN npm ci
 
 COPY prisma.config.ts tsconfig.json ./
 COPY prisma ./prisma
+
+ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder"
 RUN npx prisma generate
 
 COPY src ./src
