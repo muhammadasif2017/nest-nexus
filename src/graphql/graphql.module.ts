@@ -20,10 +20,11 @@ import jwt from 'jsonwebtoken';
         return {
           // ── Code-First Schema Generation ────────────────────────────────
           // autoSchemaFile generates the SDL (schema.graphql) automatically.
-          // path: join(process.cwd(), 'src/schema.graphql') writes it to disk,
-          // which is useful for version control and frontend team codegen.
-          // Set to `true` to keep the schema in-memory only.
-          autoSchemaFile: join(process.cwd(), 'src/schema.graphql'),
+          // In dev, path: join(process.cwd(), 'src/schema.graphql') writes it to
+          // disk for version control and frontend team codegen. In production the
+          // runtime image has no src/ directory (and runs as a non-root user that
+          // can't create one under /app), so keep the schema in-memory only there.
+          autoSchemaFile: isDev ? join(process.cwd(), 'src/schema.graphql') : true,
 
           // sortSchema: true produces a deterministic schema file, so git diffs
           // don't flip-flop on every build due to definition ordering.

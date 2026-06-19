@@ -9,7 +9,9 @@
 services:
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # noeviction (not allkeys-lru) — this instance also serves BullMQ; evicting
+    # queued job data under memory pressure silently drops jobs.
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 128mb --maxmemory-policy noeviction
     restart: unless-stopped
     volumes:
       - redis_data:/data
