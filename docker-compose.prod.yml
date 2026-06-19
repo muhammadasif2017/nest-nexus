@@ -1,0 +1,49 @@
+# Production compose for the Oracle Free Tier VM (1 OCPU / 1GB RAM).
+# Postgres is external (managed) — only app, Redis, and a TLS-terminating
+# reverse proxy run here. ClamAV/Prometheus/Grafana are intentionally
+# excluded — too heavy for this box. Test them locally via docker-compose.yml.
+#
+# Usage on the VM:
+#   docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
+#   docker compose -f docker-compose.prod.yml up -d
+services:
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD}', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    image: ghcr.io/muhammadasif2017/nest-nexus:latest
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - '3000'
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  redis_data:
+  caddy_data:
+  caddy_config:
