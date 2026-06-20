@@ -10,9 +10,20 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
-    if: github.event.workflow_run.conclusion == 'success'
+    # workflow_run fires with base-repo secrets even when CI was triggered by a
+    # fork PR — require the run came from a push to this repo (not a PR head),
+    # otherwise a fork PR naming its branch "main" could trigger a deploy of
+    # attacker-controlled code.
+    if: |
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,18 +62,30 @@ jobs:
       - name: Add VM to known_hosts
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+          echo "${{ secrets.VM_HOST_KEY }}" >> ~/.ssh/known_hosts
 
       - name: Deploy to VM
         env:
+          DEPLOY_HOST: ${{ secrets.VM_HOST }}
+          DEPLOY_USER: ${{ secrets.VM_USER }}
+          DEPLOY_APP_DIR: ${{ secrets.VM_APP_DIR }}
           IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+          REPO: ${{ github.repository }}
         run: |
-          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} '
-            cd ${{ secrets.VM_APP_DIR }} &&
-            export IMAGE_TAG=${{ env.IMAGE_TAG }} &&
-            docker compose -f docker-compose.prod.yml pull app &&
-            docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy &&
-            docker compose -f docker-compose.prod.yml up -d &&
-            timeout 60 sh -c "until docker compose -f docker-compose.prod.yml ps app | grep -q healthy; do sleep 2; done" &&
-            docker image prune -f --filter "label=org.opencontainers.image.source=https://github.com/${{ github.repository }}"
-          '
+          if [ -z "$IMAGE_TAG" ]; then
+            echo "IMAGE_TAG is empty — refusing to deploy" >&2
+            exit 1
+          fi
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -e
+            cd '$DEPLOY_APP_DIR'
+            export IMAGE_TAG='$IMAGE_TAG'
+            docker compose -f docker-compose.prod.yml pull app
+            docker compose -f docker-compose.prod.yml run --rm app npx prisma migrate deploy
+            if ! docker compose -f docker-compose.prod.yml up -d --wait --wait-timeout 60; then
+              echo 'app container did not become healthy within 60s' >&2
+              docker compose -f docker-compose.prod.yml logs app --tail=50
+              exit 1
+            fi
+            docker image prune -f --filter 'label=org.opencontainers.image.source=https://github.com/$REPO'
+          "
