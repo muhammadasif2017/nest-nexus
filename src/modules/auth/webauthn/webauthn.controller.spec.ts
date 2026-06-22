@@ -22,6 +22,8 @@ const makeWebauthnServiceMock = () => ({
   loginOptions: jest.fn(),
   loginVerify: jest.fn(),
   deleteCredential: jest.fn(),
+  signupOptions: jest.fn(),
+  signupVerify: jest.fn(),
 });
 
 const makeRes = () => ({ cookie: jest.fn() });
@@ -92,6 +94,34 @@ describe('WebauthnController', () => {
       const { controller, webauthnService } = makeController();
       await controller.deleteCredential(user);
       expect(webauthnService.deleteCredential).toHaveBeenCalledWith('user-id-1');
+    });
+  });
+
+  describe('signupOptions()', () => {
+    it('delegates to WebauthnService with email and displayName', async () => {
+      const { controller, webauthnService } = makeController();
+      webauthnService.signupOptions.mockResolvedValue({ challenge: 'signup-challenge' });
+      const result = await controller.signupOptions({
+        email: 'alice@test.com',
+        displayName: 'Alice',
+      });
+      expect(webauthnService.signupOptions).toHaveBeenCalledWith('alice@test.com', 'Alice');
+      expect(result).toEqual({ challenge: 'signup-challenge' });
+    });
+  });
+
+  describe('signupVerify()', () => {
+    it('issues a full token pair and sets the refresh cookie on success', async () => {
+      const { controller, webauthnService, authService, tokenService } = makeController();
+      webauthnService.signupVerify.mockResolvedValue('new-user-1');
+      const res = makeRes();
+      const dto = { email: 'alice@test.com', response: { id: 'cred-1' } as any };
+      const result = await controller.signupVerify(dto, res as any);
+      expect(webauthnService.signupVerify).toHaveBeenCalledWith('alice@test.com', dto.response);
+      expect(authService.issueTokens).toHaveBeenCalledWith('new-user-1');
+      expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
+      expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', { httpOnly: true });
+      expect(result).toBe(mockAuthOutput);
     });
   });
 });
