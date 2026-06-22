@@ -32,9 +32,24 @@ model User {
 
   refreshTokens  RefreshToken[]
   oauthProviders OauthProvider[]
+  apiKeys        ApiKey[]
 
   @@index([isActive])
   @@index([magicLinkExpiresAt])
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  keyHash    String    @unique
+  scopes     String[]  @default([])
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model RefreshToken {

@@ -20,6 +20,9 @@ import { TwoFactorService } from './two-factor/two-factor.service';
 import { MagicLinkController } from './magic-link/magic-link.controller';
 import { MagicLinkService } from './magic-link/magic-link.service';
 
+import { ApiKeyController } from './api-key/api-key.controller';
+import { ApiKeyService } from './api-key/api-key.service';
+
 import { QueuesModule } from '../../core/queues/queues.module';
 
 @Module({
@@ -40,13 +43,20 @@ import { QueuesModule } from '../../core/queues/queues.module';
     TokenService,
     TwoFactorService,
     MagicLinkService,
+    ApiKeyService,
     JwtStrategy,
     JwtRefreshStrategy,
     GoogleStrategy,
     GithubStrategy,
     MicrosoftStrategy,
   ],
-  controllers: [AuthController, OAuthController, TwoFactorController, MagicLinkController],
+  controllers: [
+    AuthController,
+    OAuthController,
+    TwoFactorController,
+    MagicLinkController,
+    ApiKeyController,
+  ],
   exports: [AuthService, TokenService],
 })
 export class AuthModule {}
