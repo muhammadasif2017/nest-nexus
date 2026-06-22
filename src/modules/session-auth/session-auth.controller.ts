@@ -31,8 +31,19 @@ export class SessionAuthController {
       'POST request — the double-submit pattern requires a token in hand before login.',
   })
   @ApiResponse({ status: 200, description: 'CSRF token issued.' })
-  getCsrfToken(@Req() req: Request): { csrfToken: string } {
-    return { csrfToken: req.csrfToken!() };
+  async getCsrfToken(@Req() req: Request): Promise<{ csrfToken: string }> {
+    const csrfToken = req.csrfToken!();
+
+    // The CSRF HMAC binds to req.session.id, but saveUninitialized:false means an
+    // anonymous session is never persisted — without this, every request gets a
+    // fresh in-memory session id, so the token minted here would no longer match
+    // by the time the client's next request (e.g. login) arrives.
+    (req.session as any).csrfIssued = true;
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => (err ? reject(err) : resolve()));
+    });
+
+    return { csrfToken };
   }
 
   @Post('login')
