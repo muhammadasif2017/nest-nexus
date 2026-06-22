@@ -1,4 +1,14 @@
-import { Controller, Post, Body, Req, Res, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Req,
+  Res,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -11,6 +21,19 @@ import { Public } from '../../common/decorators/public.decorator';
 @Controller('auth/session')
 export class SessionAuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Get('csrf-token')
+  @Public()
+  @ApiOperation({
+    summary: 'Get CSRF token',
+    description:
+      'Sets the XSRF-TOKEN cookie and returns the token. Call before any session-auth ' +
+      'POST request — the double-submit pattern requires a token in hand before login.',
+  })
+  @ApiResponse({ status: 200, description: 'CSRF token issued.' })
+  getCsrfToken(@Req() req: Request): { csrfToken: string } {
+    return { csrfToken: req.csrfToken!() };
+  }
 
   @Post('login')
   @Public()
