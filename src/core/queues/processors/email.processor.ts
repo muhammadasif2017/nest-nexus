@@ -19,6 +19,16 @@ import {
 import { DeadLetterService } from '../dead-letter.service';
 import { MailerService } from '../../mailer/mailer.service';
 
+// displayName is user-supplied — must be escaped before going into HTML email bodies.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 @Processor(QUEUE_EMAIL, { concurrency: EMAIL_WORKER_CONCURRENCY })
 export class EmailProcessor extends WorkerHost implements OnModuleInit {
   private readonly logger = new Logger(EmailProcessor.name);
@@ -111,7 +121,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
         `Click to log in: ${data.magicLink}\n\n` +
         `This link expires in ${data.expiresInMinutes} minutes and can only be used once.`,
       html:
-        `<p>Hi ${data.displayName},</p>` +
+        `<p>Hi ${escapeHtml(data.displayName)},</p>` +
         `<p><a href="${data.magicLink}">Click to log in</a></p>` +
         `<p>This link expires in ${data.expiresInMinutes} minutes and can only be used once.</p>`,
     });
