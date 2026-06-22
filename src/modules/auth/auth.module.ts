@@ -23,6 +23,9 @@ import { MagicLinkService } from './magic-link/magic-link.service';
 import { ApiKeyController } from './api-key/api-key.controller';
 import { ApiKeyService } from './api-key/api-key.service';
 
+import { WebauthnController } from './webauthn/webauthn.controller';
+import { WebauthnService } from './webauthn/webauthn.service';
+
 import { QueuesModule } from '../../core/queues/queues.module';
 
 @Module({
@@ -44,6 +47,7 @@ import { QueuesModule } from '../../core/queues/queues.module';
     TwoFactorService,
     MagicLinkService,
     ApiKeyService,
+    WebauthnService,
     JwtStrategy,
     JwtRefreshStrategy,
     GoogleStrategy,
@@ -56,6 +60,7 @@ import { QueuesModule } from '../../core/queues/queues.module';
     TwoFactorController,
     MagicLinkController,
     ApiKeyController,
+    WebauthnController,
   ],
   exports: [AuthService, TokenService],
 })
