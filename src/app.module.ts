@@ -7,7 +7,6 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
-// Config factories (typed, validated)
 import appConfig from './config/app.config';
 import databaseConfig from './config/database.config';
 import redisConfig from './config/redis.config';
@@ -16,7 +15,6 @@ import oauthConfig from './config/oauth.config';
 import storageConfig from './config/storage.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
-// Infrastructure modules
 import { PrismaModule } from './core/prisma/prisma.module';
 import { RedisModule } from './core/redis/redis.module';
 import { CacheModule } from './core/cache/cache.module';
@@ -27,7 +25,6 @@ import { SchedulerModule } from './core/scheduler/scheduler.module';
 import { HealthModule } from './core/health/health.module';
 import { MetricsModule } from './core/metrics/metrics.module';
 
-// Feature modules (one per domain)
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
@@ -62,8 +59,6 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
         limit: 5,
       },
     ]),
-
-    // Infrastructure
     PrismaModule,
     RedisModule,
     CacheModule,
@@ -73,26 +68,19 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
     SchedulerModule,
     HealthModule,
     MetricsModule,
-
-    // Feature Modules
     AuthModule,
     SessionAuthModule,
     UsersModule,
     NotificationsModule,
     StorageModule,
-
-    // GraphQL (Apollo + subscriptions + schema generation)
     GraphQLConfigModule,
   ],
 
   providers: [
-    // ThrottlerGuard first — reject rate-limited requests before auth runs
     {
       provide: APP_GUARD,
       useClass: AppThrottlerGuard,
     },
-    // JwtAuthGuard global — all routes require auth by default.
-    // Use @Public() to opt individual routes out.
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
@@ -101,7 +89,6 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
       provide: APP_INTERCEPTOR,
       useClass: LoggingInterceptor,
     },
-    // Register filter via DI so ConfigService can be injected into it
     {
       provide: APP_FILTER,
       useClass: GlobalExceptionFilter,
