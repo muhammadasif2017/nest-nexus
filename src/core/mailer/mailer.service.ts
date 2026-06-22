@@ -40,6 +40,8 @@ export class MailerService implements OnModuleInit {
       this.logger.warn(`SMTP not configured — skipping send to ${options.to}`);
       return;
     }
+    // Intentionally not caught here — let it propagate to the BullMQ job so the
+    // existing retry/backoff + dead-letter pipeline (queues.module.ts) handles failures.
     await this.transporter.sendMail({
       from: this.config.get<string>('smtp.from'),
       ...options,
