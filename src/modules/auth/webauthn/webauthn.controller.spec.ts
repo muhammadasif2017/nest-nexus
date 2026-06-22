@@ -21,6 +21,7 @@ const makeWebauthnServiceMock = () => ({
   registerVerify: jest.fn(),
   loginOptions: jest.fn(),
   loginVerify: jest.fn(),
+  deleteCredential: jest.fn(),
 });
 
 const makeRes = () => ({ cookie: jest.fn() });
@@ -83,6 +84,14 @@ describe('WebauthnController', () => {
       expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', { httpOnly: true });
       expect(result).toBe(mockAuthOutput);
+    });
+  });
+
+  describe('deleteCredential()', () => {
+    it('delegates to WebauthnService scoped to the current user', async () => {
+      const { controller, webauthnService } = makeController();
+      await controller.deleteCredential(user);
+      expect(webauthnService.deleteCredential).toHaveBeenCalledWith('user-id-1');
     });
   });
 });

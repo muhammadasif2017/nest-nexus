@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { UnauthorizedException } from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cache } from 'cache-manager';
 import { WebauthnService } from './webauthn.service';
@@ -29,6 +29,7 @@ const makePrismaMock = () => ({
     findUnique: jest.fn(),
     upsert: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
   },
   user: {
     findUnique: jest.fn(),
@@ -286,6 +287,31 @@ describe('WebauthnService', () => {
       });
       await service.loginVerify('alice@test.com', response);
       expect(cache.del).toHaveBeenCalledWith('webauthn:login:alice@test.com');
+    });
+  });
+
+  describe('deleteCredential()', () => {
+    it('deletes the credential owned by the user', async () => {
+      const { service, prisma } = makeService();
+      prisma.webauthnCredential.findUnique.mockResolvedValue({ id: 'wc-1', userId: 'user-1' });
+      prisma.webauthnCredential.delete.mockResolvedValue({});
+      await service.deleteCredential('user-1');
+      expect(prisma.webauthnCredential.delete).toHaveBeenCalledWith({
+        where: { userId: 'user-1' },
+      });
+    });
+
+    it('throws NotFoundException when no credential is registered for the user', async () => {
+      const { service, prisma } = makeService();
+      prisma.webauthnCredential.findUnique.mockResolvedValue(null);
+      await expect(service.deleteCredential('user-1')).rejects.toThrow(NotFoundException);
+    });
+
+    it('does not call delete when no credential is found', async () => {
+      const { service, prisma } = makeService();
+      prisma.webauthnCredential.findUnique.mockResolvedValue(null);
+      await expect(service.deleteCredential('user-1')).rejects.toThrow();
+      expect(prisma.webauthnCredential.delete).not.toHaveBeenCalled();
     });
   });
 });

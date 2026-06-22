@@ -1,4 +1,4 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
@@ -173,5 +173,15 @@ export class WebauthnService {
     await this.cache.del(`webauthn:login:${normalizedEmail}`);
 
     return user.id;
+  }
+
+  async deleteCredential(userId: string): Promise<void> {
+    const credential = await this.prisma.webauthnCredential.findUnique({ where: { userId } });
+
+    if (!credential) {
+      throw new NotFoundException('No passkey registered for this account.');
+    }
+
+    await this.prisma.webauthnCredential.delete({ where: { userId } });
   }
 }

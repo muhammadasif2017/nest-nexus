@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Delete, Body, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AuthService } from '../auth.service';
@@ -64,5 +64,15 @@ export class WebauthnController {
     const { auth, refreshToken } = await this.authService.issueTokens(userId);
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
+  }
+
+  @Delete('credential')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: "Delete the current user's passkey" })
+  @ApiResponse({ status: 204, description: 'Passkey deleted.' })
+  @ApiResponse({ status: 404, description: 'No passkey registered for this account.' })
+  async deleteCredential(@CurrentUser() user: JwtPayload): Promise<void> {
+    await this.webauthnService.deleteCredential(user.sub);
   }
 }
