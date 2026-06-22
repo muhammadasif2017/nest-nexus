@@ -51,6 +51,22 @@ export class OAuthController {
     return this.handleOAuthCallback(req, res);
   }
 
+  // ── OAuth2 — Microsoft ───────────────────────────────────────────────────────
+
+  @Get('microsoft')
+  @Public()
+  @UseGuards(AuthGuard('microsoft'))
+  @ApiOperation({ summary: 'Initiate Microsoft OAuth2 flow' })
+  microsoftAuth() {}
+
+  @Get('microsoft/callback')
+  @Public()
+  @UseGuards(AuthGuard('microsoft'))
+  @ApiOperation({ summary: 'Microsoft OAuth2 callback' })
+  async microsoftCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
+    return this.handleOAuthCallback(req, res);
+  }
+
   // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
   private async handleOAuthCallback(req: Request, res: Response): Promise<void> {
     const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);

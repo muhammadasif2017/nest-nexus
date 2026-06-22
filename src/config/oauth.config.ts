@@ -9,4 +9,8 @@ export default registerAs('oauth', () => ({
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
   githubCallbackUrl:
     process.env.GITHUB_CALLBACK_URL ?? 'http://localhost:3000/api/v1/auth/github/callback',
+  microsoftClientId: process.env.MICROSOFT_CLIENT_ID,
+  microsoftClientSecret: process.env.MICROSOFT_CLIENT_SECRET,
+  microsoftCallbackUrl:
+    process.env.MICROSOFT_CALLBACK_URL ?? 'http://localhost:3000/api/v1/auth/microsoft/callback',
 }));
