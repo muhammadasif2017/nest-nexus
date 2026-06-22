@@ -163,7 +163,7 @@ src/
 ├── graphql/                         # GraphQLModule configuration
 │
 └── modules/                         # Feature modules (one per domain)
-    ├── auth/                        # JWT, sessions, OAuth2, TOTP, magic links
+    ├── auth/                        # JWT, sessions, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links
     ├── users/                       # DataLoader, serialization
     └── notifications/               # WebSocket gateway, SSE, fan-out delivery
 
@@ -269,7 +269,7 @@ chosen over pg-boss, Agenda, and Bull.
 ### JWT Login
 
 ```
-POST /graphql { mutation login(input) }
+POST /api/v1/auth/login (REST only — no GraphQL mutation; see ADR-003 boundary)
   → AuthService validates credentials (timing-safe bcrypt)
   → TokenService issues access token (15m) + refresh token (7d)
   → Access token → response body (store in memory, not localStorage)
@@ -289,13 +289,15 @@ POST /api/v1/auth/refresh (refresh_token cookie sent automatically)
   → New access token → response body
 ```
 
-### OAuth2 (Google / GitHub)
+### OAuth2 (Google / GitHub / Microsoft)
 
 ```
 GET /api/v1/auth/google          → redirects to Google consent screen
 GET /api/v1/auth/google/callback → Passport verifies, OAuthService upserts OauthProvider row
                                  → issues token pair → redirects to frontend
                                    with access token as query param (?token=...)
+
+GitHub and Microsoft follow the same pattern: /auth/github(/callback), /auth/microsoft(/callback)
 ```
 
 ### Account Linking
@@ -459,6 +461,7 @@ Optional variables enable additional features:
 ```bash
 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET    # Enables Google OAuth
 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET    # Enables GitHub OAuth
+MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET # Enables Microsoft OAuth
 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  # Enables real S3 (MinIO used otherwise)
 ALERTS_WEBHOOK_URL                         # Enables Slack/webhook job failure alerts
 ```
