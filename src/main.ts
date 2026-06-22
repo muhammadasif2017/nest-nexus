@@ -58,7 +58,7 @@ async function bootstrap() {
     origin: CLIENT_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-API-Key'],
   });
 
   // Sets ~14 security-related HTTP headers in one shot. We relax contentSecurityPolicy
