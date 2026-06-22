@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
@@ -47,18 +47,29 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
     // ── Rate Limiting (Throttler) ─────────────────────────────────────────
     // 10 requests per 60 seconds per IP, globally enforced via APP_GUARD below.
     // Individual routes can override with @Throttle({ default: { limit: 3, ttl: 60000 } })
-    ThrottlerModule.forRoot([
-      {
-        name: 'default',
-        ttl: 60_000, // 60 seconds window (ms)
-        limit: 10,
+    // Limits are multiplied outside production — manual auth-flow testing (e.g. the
+    // session-auth csrf-token -> login -> logout round trip) easily exceeds 10/min
+    // from a single browser tab, with no real abuse risk in dev.
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const isDev = config.get<string>('app.nodeEnv') !== 'production';
+        const multiplier = isDev ? 10 : 1;
+        return [
+          {
+            name: 'default',
+            ttl: 60_000,
+            limit: 10 * multiplier,
+          },
+          {
+            name: 'strict', // For auth routes: 5 attempts / 10 minutes
+            ttl: 600_000,
+            limit: 5 * multiplier,
+          },
+        ];
       },
-      {
-        name: 'strict', // For auth routes: 5 attempts / 10 minutes
-        ttl: 600_000,
-        limit: 5,
-      },
-    ]),
+    }),
     PrismaModule,
     RedisModule,
     CacheModule,
