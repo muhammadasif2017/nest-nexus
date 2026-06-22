@@ -15,6 +15,8 @@ import { ExpressAdapter } from '@bull-board/express';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QUEUE_EMAIL } from './core/queues/queues.constants';
+import { ApiKeyService } from './modules/auth/api-key/api-key.service';
+import { createApiKeyExpressMiddleware } from './common/guards/api-key.guard';
 
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
@@ -169,7 +171,13 @@ async function bootstrap() {
       queues: [new BullMQAdapter(app.get<Queue>(getQueueToken(QUEUE_EMAIL))) as any],
       serverAdapter: bullBoardAdapter,
     });
-    app.use('/api/queues', bullBoardAdapter.getRouter());
+
+    const apiKeyService = app.get(ApiKeyService);
+    app.use(
+      '/api/queues',
+      createApiKeyExpressMiddleware(apiKeyService),
+      bullBoardAdapter.getRouter(),
+    );
   }
 
   // Drain the pg pool used by connect-pg-simple when the process shuts down.
