@@ -92,11 +92,15 @@ export class SessionAuthController {
   }
 
   @Post('logout')
+  @Public()
   @UseGuards(SessionGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
     summary: 'Session-based logout',
-    description: 'Destroys the server-side session.',
+    description:
+      'Destroys the server-side session. @Public() here only opts out of the global ' +
+      'JWT guard (this route uses the session cookie, not a Bearer token) — SessionGuard ' +
+      'still enforces real authentication.',
   })
   @ApiResponse({ status: 204, description: 'Session destroyed.' })
   @ApiResponse({ status: 401, description: 'No active session.' })
