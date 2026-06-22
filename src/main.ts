@@ -18,6 +18,7 @@ import { QUEUE_EMAIL } from './core/queues/queues.constants';
 import { ApiKeyService } from './modules/auth/api-key/api-key.service';
 import { createApiKeyExpressMiddleware } from './common/guards/api-key.guard';
 
+import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
@@ -118,6 +119,23 @@ async function bootstrap() {
     getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
   });
   app.use('/api/v1/auth/session', doubleCsrfProtection);
+
+  // doubleCsrfProtection is raw Express middleware, outside Nest's pipeline — its errors
+  // never reach GlobalExceptionFilter and would otherwise surface as a bare 500 with a
+  // leaked stack trace. Catch it here and match the filter's REST error envelope.
+  app.use(
+    '/api/v1/auth/session',
+    (err: { code?: string }, req: Request, res: Response, next: NextFunction) => {
+      if (err?.code !== 'EBADCSRFTOKEN') return next(err);
+      res.status(403).json({
+        statusCode: 403,
+        errorCode: 'FORBIDDEN',
+        message: 'Invalid or missing CSRF token.',
+        path: req.originalUrl,
+        timestamp: new Date().toISOString(),
+      });
+    },
+  );
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
