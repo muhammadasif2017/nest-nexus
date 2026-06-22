@@ -4,9 +4,11 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { QUEUE_EMAIL, DEFAULT_JOB_ATTEMPTS } from './queues.constants';
 import { DeadLetterService } from './dead-letter.service';
 import { EmailProcessor } from './processors/email.processor';
+import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
   imports: [
+    MailerModule,
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
