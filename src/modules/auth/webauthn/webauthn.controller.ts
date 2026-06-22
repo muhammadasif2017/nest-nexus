@@ -8,6 +8,8 @@ import { AuthOutput } from '../dto/auth.output';
 import { WebauthnRegisterVerifyInput } from './dto/webauthn-register-verify.input';
 import { WebauthnLoginOptionsInput } from './dto/webauthn-login-options.input';
 import { WebauthnLoginVerifyInput } from './dto/webauthn-login-verify.input';
+import { WebauthnSignupOptionsInput } from './dto/webauthn-signup-options.input';
+import { WebauthnSignupVerifyInput } from './dto/webauthn-signup-verify.input';
 import { Public } from '../../../common/decorators/public.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { JwtPayload } from '../strategies/jwt.strategy';
@@ -74,5 +76,40 @@ export class WebauthnController {
   @ApiResponse({ status: 404, description: 'No passkey registered for this account.' })
   async deleteCredential(@CurrentUser() user: JwtPayload): Promise<void> {
     await this.webauthnService.deleteCredential(user.sub);
+  }
+
+  // ── Passkey-only signup — separate from register/options+verify above, which
+  // require an existing JWT-authenticated user. These create a brand-new account.
+
+  @Post('signup/options')
+  @Public()
+  @ApiOperation({ summary: 'Generate WebAuthn registration options for a brand-new account' })
+  @ApiBody({ type: WebauthnSignupOptionsInput })
+  @ApiResponse({ status: 409, description: 'Email already registered.' })
+  async signupOptions(@Body() dto: WebauthnSignupOptionsInput) {
+    return this.webauthnService.signupOptions(dto.email, dto.displayName);
+  }
+
+  @Post('signup/verify')
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify signup and create a new passkey-only account',
+    description:
+      'Creates a user with no password — the passkey is the only credential. ' +
+      'Issues a full access/refresh token pair on success.',
+  })
+  @ApiBody({ type: WebauthnSignupVerifyInput })
+  @ApiResponse({ status: 200, description: 'Account created and logged in.', type: AuthOutput })
+  @ApiResponse({ status: 409, description: 'Email already registered.' })
+  @ApiResponse({ status: 401, description: 'Invalid registration response.' })
+  async signupVerify(
+    @Body() dto: WebauthnSignupVerifyInput,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<AuthOutput> {
+    const userId = await this.webauthnService.signupVerify(dto.email, dto.response);
+    const { auth, refreshToken } = await this.authService.issueTokens(userId);
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
+    return auth;
   }
 }

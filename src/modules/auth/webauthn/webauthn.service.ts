@@ -1,5 +1,12 @@
-import { Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import {
@@ -23,6 +30,7 @@ export class WebauthnService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   private get rpID(): string {
@@ -183,5 +191,101 @@ export class WebauthnService {
     }
 
     await this.prisma.webauthnCredential.delete({ where: { userId } });
+  }
+
+  // ── Passkey-only signup — separate flow from registerOptions/registerVerify above,
+  // which require an existing JWT-authenticated user. These create a brand-new account
+  // with no password, using the passkey itself as the only credential.
+
+  async signupOptions(
+    email: string,
+    displayName: string,
+  ): Promise<PublicKeyCredentialCreationOptionsJSON> {
+    const normalizedEmail = email.toLowerCase();
+
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('An account with this email address already exists.');
+    }
+
+    const options = await generateRegistrationOptions({
+      rpName: this.rpName,
+      rpID: this.rpID,
+      userName: normalizedEmail,
+      excludeCredentials: [],
+    });
+
+    await this.cache.set(
+      `webauthn:signup:${normalizedEmail}`,
+      JSON.stringify({ challenge: options.challenge, displayName }),
+      CHALLENGE_TTL_MS,
+    );
+
+    return options;
+  }
+
+  async signupVerify(email: string, response: RegistrationResponseJSON): Promise<string> {
+    const normalizedEmail = email.toLowerCase();
+
+    const cached = await this.cache.get<string>(`webauthn:signup:${normalizedEmail}`);
+    if (!cached) {
+      throw new UnauthorizedException('Signup challenge expired or not found.');
+    }
+    const { challenge: expectedChallenge, displayName } = JSON.parse(cached) as {
+      challenge: string;
+      displayName: string;
+    };
+
+    // Re-check at verify time — options/verify is a two-step ceremony, so the email
+    // could have been registered by a concurrent request in between.
+    const existing = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ConflictException('An account with this email address already exists.');
+    }
+
+    const verification = await verifyRegistrationResponse({
+      response,
+      expectedChallenge,
+      expectedOrigin: this.origin,
+      expectedRPID: this.rpID,
+    });
+
+    if (!verification.verified || !verification.registrationInfo) {
+      throw new UnauthorizedException('WebAuthn signup verification failed.');
+    }
+
+    const { credential } = verification.registrationInfo;
+
+    const newUser = await this.prisma.user.create({
+      data: {
+        email: normalizedEmail,
+        displayName,
+        password: null,
+        hasPassword: false,
+        lastLoginAt: new Date(),
+      },
+    });
+
+    await this.prisma.webauthnCredential.create({
+      data: {
+        userId: newUser.id,
+        credentialId: credential.id,
+        publicKey: Buffer.from(credential.publicKey),
+        counter: credential.counter,
+        transports: credential.transports ?? [],
+      },
+    });
+
+    this.eventEmitter.emit('user.created', { userId: newUser.id });
+
+    await this.cache.del(`webauthn:signup:${normalizedEmail}`);
+
+    return newUser.id;
   }
 }
