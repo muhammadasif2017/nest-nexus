@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { EmailProcessor } from './email.processor';
 import { DeadLetterService } from '../dead-letter.service';
+import { MailerService } from '../../mailer/mailer.service';
 import { EmailJobName, DEFAULT_JOB_ATTEMPTS } from '../queues.constants';
 
 // ── Factories ─────────────────────────────────────────────────────────────────
@@ -21,15 +22,21 @@ const makeJob = (overrides: Record<string, unknown> = {}): Job =>
 
 const makeDeadLetterMock = () => ({ handleFailedJob: jest.fn().mockResolvedValue(undefined) });
 const makeConfigMock = () => ({ get: jest.fn().mockReturnValue(5) });
+const makeMailerMock = () => ({
+  isConfigured: false,
+  send: jest.fn().mockResolvedValue(undefined),
+});
 
 const makeProcessor = () => {
   const deadLetter = makeDeadLetterMock();
   const config = makeConfigMock();
+  const mailer = makeMailerMock();
   const processor = new EmailProcessor(
     deadLetter as unknown as DeadLetterService,
     config as unknown as ConfigService,
+    mailer as unknown as MailerService,
   );
-  return { processor, deadLetter, config };
+  return { processor, deadLetter, config, mailer };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

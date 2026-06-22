@@ -17,6 +17,7 @@ import {
   MagicLinkEmailData,
 } from '../dto/email.job.dto';
 import { DeadLetterService } from '../dead-letter.service';
+import { MailerService } from '../../mailer/mailer.service';
 
 @Processor(QUEUE_EMAIL, { concurrency: EMAIL_WORKER_CONCURRENCY })
 export class EmailProcessor extends WorkerHost implements OnModuleInit {
@@ -25,6 +26,7 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
   constructor(
     private readonly deadLetter: DeadLetterService,
     private readonly config: ConfigService,
+    private readonly mailer: MailerService,
   ) {
     super();
   }
@@ -73,8 +75,8 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
   }
 
   // ── Private senders ────────────────────────────────────────────────────────
-  // SMTP integration is wired in Phase 5. These log the intent and return
-  // so the job completes — swap the logger calls for a mailer transport then.
+  // Only sendMagicLink is wired to real SMTP (MailerService) so far — the rest
+  // stay stub logs until the equivalent wiring lands for them.
 
   private async sendWelcome(data: WelcomeEmailData): Promise<void> {
     this.logger.log(`[STUB] Welcome email → ${data.to} (${data.displayName})`);
@@ -97,6 +99,21 @@ export class EmailProcessor extends WorkerHost implements OnModuleInit {
   }
 
   private async sendMagicLink(data: MagicLinkEmailData): Promise<void> {
-    this.logger.log(`[STUB] Magic link email → ${data.to}, expires in ${data.expiresInMinutes}m`);
+    if (!this.mailer.isConfigured) {
+      this.logger.log(`[STUB] Magic link email → ${data.to}, expires in ${data.expiresInMinutes}m`);
+      return;
+    }
+    await this.mailer.send({
+      to: data.to,
+      subject: 'Your nest-nexus login link',
+      text:
+        `Hi ${data.displayName},\n\n` +
+        `Click to log in: ${data.magicLink}\n\n` +
+        `This link expires in ${data.expiresInMinutes} minutes and can only be used once.`,
+      html:
+        `<p>Hi ${data.displayName},</p>` +
+        `<p><a href="${data.magicLink}">Click to log in</a></p>` +
+        `<p>This link expires in ${data.expiresInMinutes} minutes and can only be used once.</p>`,
+    });
   }
 }

@@ -13,6 +13,7 @@ import redisConfig from './config/redis.config';
 import jwtConfig from './config/jwt.config';
 import oauthConfig from './config/oauth.config';
 import storageConfig from './config/storage.config';
+import smtpConfig from './config/smtp.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
 import { PrismaModule } from './core/prisma/prisma.module';
@@ -39,7 +40,15 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
     // validationSchema applies Zod/Joi at startup — fail fast if env is misconfigured
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, redisConfig, jwtConfig, oauthConfig, storageConfig],
+      load: [
+        appConfig,
+        databaseConfig,
+        redisConfig,
+        jwtConfig,
+        oauthConfig,
+        storageConfig,
+        smtpConfig,
+      ],
       validate: configValidationSchema, // Throws on startup if .env is invalid
       cache: true, // Caches parsed config in memory — minor perf win
     }),
