@@ -32,7 +32,6 @@ async function bootstrap() {
     bufferLogs: true,
   });
 
-  // ── Pull typed config ──────────────────────────────────────────────────────
   const config = app.get(ConfigService);
   const PORT = config.get<number>('app.port', 3000);
   const NODE_ENV = config.get<string>('app.nodeEnv');
@@ -41,11 +40,8 @@ async function bootstrap() {
   const DATABASE_URL = config.get<string>('database.url');
   const CLIENT_ORIGIN = config.get<string>('app.clientOrigin');
 
-  // ── Logger (must be first so early errors are captured) ───────────────────
   app.useLogger(app.get(Logger));
 
-  // ── WebSocket — Redis adapter (cross-instance fan-out) ────────────────────
-  // Must be configured before listen() so createIOServer picks up the adapter.
   const redisIoAdapter = new RedisIoAdapter(app);
   await redisIoAdapter.connectToRedis({
     host: config.get<string>('redis.host') ?? 'localhost',
@@ -54,9 +50,7 @@ async function bootstrap() {
   });
   app.useWebSocketAdapter(redisIoAdapter);
 
-  // ── CORS ──────────────────────────────────────────────────────────────────
-  // Only allow requests from the known frontend origin. Credentials: true is
-  // required for cookies (sessions) to be sent cross-origin.
+  // Credentials: true is required for cookies (sessions) to be sent cross-origin.
   app.enableCors({
     origin: CLIENT_ORIGIN,
     credentials: true,
@@ -64,7 +58,6 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
   });
 
-  // ── Helmet ────────────────────────────────────────────────────────────────
   // Sets ~14 security-related HTTP headers in one shot. We relax contentSecurityPolicy
   // only in dev so the GraphQL Playground can load its inline scripts.
   app.use(
@@ -74,11 +67,9 @@ async function bootstrap() {
     }),
   );
 
-  // ── Compression ───────────────────────────────────────────────────────────
   // Gzip all responses. Skip if Content-Type is already binary (images, etc.)
   app.use(compression());
 
-  // ── Cookie Parser ─────────────────────────────────────────────────────────
   // Must come BEFORE csurf so it can read the CSRF cookie from the request.
   app.use(cookieParser());
 
@@ -86,8 +77,6 @@ async function bootstrap() {
     throw new Error('SESSION_SECRET is not defined in environment variables');
   }
 
-  // ── Session (Hybrid Auth: session-based path) ──────────────────────────────
-  // Sessions are stored in PostgreSQL to survive server restarts/scale-out.
   const PgSession = connectPgSimple(session);
   const pgPool = new Pool({
     connectionString: DATABASE_URL,
@@ -126,7 +115,6 @@ async function bootstrap() {
     },
     getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
   });
-  // Apply only to session auth routes — not to JWT Bearer or GraphQL endpoints
   app.use('/api/v1/auth/session', doubleCsrfProtection);
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
@@ -155,7 +143,6 @@ async function bootstrap() {
   // LoggingInterceptor uses @InjectPinoLogger so it's registered via APP_INTERCEPTOR in AppModule.
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  // ── Swagger (non-production only) ─────────────────────────────────────────
   if (isDev) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('nest-nexus API')

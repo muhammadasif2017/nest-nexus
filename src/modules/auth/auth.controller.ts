@@ -31,9 +31,6 @@ import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtPayload } from './strategies/jwt.strategy';
 
-// OAuth (oauth/), 2FA (two-factor/), magic links (magic-link/) and session-based
-// auth (../session-auth) each have their own controller — see ADR-015. This
-// controller covers only the core JWT credential flow + device-session management.
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
@@ -57,11 +54,10 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Email already in use.' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
   async register(@Body() dto: RegisterInput, @Res({ passthrough: true }) res: Response) {
-    // passthrough: true on @Res() means NestJS still handles the response
-    // serialization — we're just adding the cookie as a side effect.
+    // passthrough: true on @Res() means NestJS still handles the response serialization
     const { auth, refreshToken } = await this.authService.register(dto);
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
-    return auth; // NestJS serializes this via the global ClassSerializerInterceptor
+    return auth;
   }
 
   @Post('login')

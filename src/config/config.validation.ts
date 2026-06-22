@@ -1,8 +1,4 @@
 import { z } from 'zod';
-
-// This schema is the single source of truth for ALL required environment variables.
-// Zod will coerce types (e.g., string "3000" → number 3000) and throw a
-// ZodError with a human-readable message if anything is missing or wrong.
 export const configValidationSchema = (config: Record<string, unknown>) => {
   const schema = z.object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
