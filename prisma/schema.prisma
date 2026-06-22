@@ -30,12 +30,25 @@ model User {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  refreshTokens  RefreshToken[]
-  oauthProviders OauthProvider[]
-  apiKeys        ApiKey[]
+  refreshTokens      RefreshToken[]
+  oauthProviders     OauthProvider[]
+  apiKeys            ApiKey[]
+  webauthnCredential WebauthnCredential?
 
   @@index([isActive])
   @@index([magicLinkExpiresAt])
+}
+
+model WebauthnCredential {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      Int      @default(0)
+  transports   String[] @default([])
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ApiKey {
