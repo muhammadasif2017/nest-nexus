@@ -269,7 +269,7 @@ chosen over pg-boss, Agenda, and Bull.
 ### JWT Login
 
 ```
-POST /graphql { mutation login(input) }
+POST /api/v1/auth/login (REST only — no GraphQL mutation; see ADR-003 boundary)
   → AuthService validates credentials (timing-safe bcrypt)
   → TokenService issues access token (15m) + refresh token (7d)
   → Access token → response body (store in memory, not localStorage)
