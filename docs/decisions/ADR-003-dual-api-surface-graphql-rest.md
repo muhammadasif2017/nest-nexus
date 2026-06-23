@@ -1,7 +1,8 @@
 # ADR-003: Dual API Surface — GraphQL + REST
 
 ## Status
-Accepted
+Superseded (2026-06-23) — GraphQL was removed; the API surface is now REST-only.
+Domain CRUD (users) moved to a REST controller. This ADR is retained for history.
 
 ## Date
 2026-06-15

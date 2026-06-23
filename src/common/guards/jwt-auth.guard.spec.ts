@@ -1,12 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
-
-jest.mock('@nestjs/graphql', () => ({
-  GqlExecutionContext: { create: jest.fn() },
-}));
 
 const mockReflector = (isPublic: boolean | undefined) =>
   ({
@@ -20,17 +15,6 @@ const httpContext = (req: object = {}): ExecutionContext =>
     getClass: () => ({}),
     switchToHttp: () => ({ getRequest: () => req }),
   }) as unknown as ExecutionContext;
-
-const gqlContext = (req: object = {}): ExecutionContext => {
-  (GqlExecutionContext.create as jest.Mock).mockReturnValue({
-    getContext: () => ({ req }),
-  });
-  return {
-    getType: () => 'graphql',
-    getHandler: () => ({}),
-    getClass: () => ({}),
-  } as unknown as ExecutionContext;
-};
 
 describe('JwtAuthGuard', () => {
   let superCanActivate: jest.SpyInstance;
@@ -109,32 +93,6 @@ describe('JwtAuthGuard', () => {
       const ctx = httpContext(req);
 
       expect(guard.getRequest(ctx)).toBe(req);
-    });
-
-    it('returns req from GraphQL context', () => {
-      const guard = new JwtAuthGuard(mockReflector(false));
-      const req = { headers: { authorization: 'Bearer gql-token' } };
-      const ctx = gqlContext(req);
-
-      expect(guard.getRequest(ctx)).toBe(req);
-    });
-
-    it('calls GqlExecutionContext.create with context for GraphQL', () => {
-      const guard = new JwtAuthGuard(mockReflector(false));
-      const ctx = gqlContext({});
-
-      guard.getRequest(ctx);
-
-      expect(GqlExecutionContext.create).toHaveBeenCalledWith(ctx);
-    });
-
-    it('does not call GqlExecutionContext.create for HTTP', () => {
-      const guard = new JwtAuthGuard(mockReflector(false));
-      (GqlExecutionContext.create as jest.Mock).mockClear();
-
-      guard.getRequest(httpContext());
-
-      expect(GqlExecutionContext.create).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { AppThrottlerGuard } from './common/guards/app-throttler.guard';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER } from '@nestjs/core';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -31,7 +30,6 @@ import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
 import { NotificationsModule } from './modules/notifications/notification.module';
 import { StorageModule } from './core/storage/storage.module';
-import { GraphQLConfigModule } from './graphql/graphql.module';
 
 @Module({
   imports: [
@@ -93,13 +91,12 @@ import { GraphQLConfigModule } from './graphql/graphql.module';
     UsersModule,
     NotificationsModule,
     StorageModule,
-    GraphQLConfigModule,
   ],
 
   providers: [
     {
       provide: APP_GUARD,
-      useClass: AppThrottlerGuard,
+      useClass: ThrottlerGuard,
     },
     {
       provide: APP_GUARD,

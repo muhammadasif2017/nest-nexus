@@ -3,8 +3,7 @@ import request from 'supertest';
 import { createTestApp, resetDb } from './helpers/test-app';
 import { PrismaService } from '../src/core/prisma/prisma.service';
 
-// Users CRUD lives in GraphQL, not REST, per CLAUDE.md (domain CRUD -> GraphQL).
-// All requests go through POST /graphql.
+// Users CRUD lives under the REST /api/v1/users routes.
 describe('Users (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
@@ -15,11 +14,6 @@ describe('Users (e2e)', () => {
     email: 'e2e-users@test.com',
     displayName: 'E2E Users',
     password: 'P@ssw0rd123!',
-  };
-
-  const gql = (query: string, variables?: Record<string, unknown>, token?: string) => {
-    const req = request(app.getHttpServer()).post('/graphql').send({ query, variables });
-    return token ? req.set('Authorization', `Bearer ${token}`) : req;
   };
 
   beforeAll(async () => {
@@ -40,49 +34,57 @@ describe('Users (e2e)', () => {
     await app.close();
   });
 
-  it('query { me } returns the authenticated user without the password field', async () => {
-    const res = await gql('query { me { id email displayName roles } }', undefined, accessToken);
+  it('GET /users/me returns the authenticated user without the password field', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
 
-    expect(res.body.errors).toBeUndefined();
-    expect(res.body.data.me.email).toBe(credentials.email);
-    expect(res.body.data.me).not.toHaveProperty('password');
+    expect(res.body.email).toBe(credentials.email);
+    expect(res.body).not.toHaveProperty('password');
   });
 
-  it('query { me } without a token returns a GraphQL auth error, HTTP 200', async () => {
-    const res = await gql('query { me { id email } }');
+  it('GET /users/me without a token returns HTTP 401', async () => {
+    const res = await request(app.getHttpServer()).get('/api/v1/users/me');
 
-    expect(res.status).toBe(200); // GlobalExceptionFilter never changes HTTP status for GraphQL
-    expect(res.body.errors).toBeDefined();
-    expect(res.body.errors[0].extensions?.code).toBeDefined();
+    expect(res.status).toBe(401);
+    expect(res.body.errorCode).toBeDefined();
   });
 
-  it('query { user(id) } is public and returns limited fields without auth', async () => {
-    const res = await gql(`query { user(id: "${userId}") { id email displayName } }`);
-
-    expect(res.body.errors).toBeUndefined();
-    expect(res.body.data.user.email).toBe(credentials.email);
+  it('GET /users/:id requires auth — returns 401 without a token', async () => {
+    const res = await request(app.getHttpServer()).get(`/api/v1/users/${userId}`);
+    expect(res.status).toBe(401);
   });
 
-  it('mutation { updateProfile } updates the caller\'s own displayName', async () => {
-    const res = await gql(
-      'mutation($input: UpdateUserInput!) { updateProfile(input: $input) { displayName } }',
-      { input: { displayName: 'Updated Name' } },
-      accessToken,
-    );
+  it('GET /users/:id returns limited fields for an authenticated caller', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/api/v1/users/${userId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
 
-    expect(res.body.errors).toBeUndefined();
-    expect(res.body.data.updateProfile.displayName).toBe('Updated Name');
+    expect(res.body.email).toBe(credentials.email);
+    expect(res.body).not.toHaveProperty('password');
   });
 
-  it('query { users } (admin-only) is rejected for a non-admin user', async () => {
-    const res = await gql('query { users { id } }', undefined, accessToken);
+  it("PATCH /users/me updates the caller's own displayName", async () => {
+    const res = await request(app.getHttpServer())
+      .patch('/api/v1/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ displayName: 'Updated Name' })
+      .expect(200);
 
-    // RolesGuard.canActivate returns false -> Nest throws ForbiddenException
-    expect(res.body.errors).toBeDefined();
-    expect(res.body.data?.users).toBeUndefined();
+    expect(res.body.displayName).toBe('Updated Name');
   });
 
-  it('query { users } and deactivateUser succeed once the caller has the admin role', async () => {
+  it('GET /users (admin-only) is rejected for a non-admin user with 403', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/users')
+      .set('Authorization', `Bearer ${accessToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('GET /users and DELETE /users/:id succeed once the caller has the admin role', async () => {
     await prisma.user.update({ where: { id: userId }, data: { roles: ['user', 'admin'] } });
 
     // Roles are embedded in the JWT at login time — re-login to pick up the change.
@@ -92,16 +94,16 @@ describe('Users (e2e)', () => {
       .expect(200);
     const adminToken = loginRes.body.accessToken;
 
-    const listRes = await gql('query { users { id email } }', undefined, adminToken);
-    expect(listRes.body.errors).toBeUndefined();
-    expect(Array.isArray(listRes.body.data.users)).toBe(true);
+    const listRes = await request(app.getHttpServer())
+      .get('/api/v1/users')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(Array.isArray(listRes.body)).toBe(true);
 
-    const deactivateRes = await gql(
-      `mutation { deactivateUser(id: "${userId}") { id isActive } }`,
-      undefined,
-      adminToken,
-    );
-    expect(deactivateRes.body.errors).toBeUndefined();
-    expect(deactivateRes.body.data.deactivateUser.isActive).toBe(false);
+    const deactivateRes = await request(app.getHttpServer())
+      .delete(`/api/v1/users/${userId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .expect(200);
+    expect(deactivateRes.body.isActive).toBe(false);
   });
 });

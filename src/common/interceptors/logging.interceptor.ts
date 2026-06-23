@@ -1,5 +1,4 @@
 import { Injectable, NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { Observable, tap } from 'rxjs';
 import { PinoLogger, InjectPinoLogger } from 'nestjs-pino';
 
@@ -15,24 +14,8 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const startTime = Date.now();
 
-    // ── Context Detection ────────────────────────────────────────────────────
-    // An ExecutionContext can be HTTP, GraphQL, WebSocket, or RPC.
-    // We need to handle GraphQL differently because its "request" is a GQL operation,
-    // not an HTTP route. context.getType() returns 'http' or 'graphql'.
-    const isGraphQL = context.getType<string>() === 'graphql';
-
-    let operationLabel: string;
-
-    if (isGraphQL) {
-      // For GraphQL, the meaningful information is the operation name and type
-      // (query vs mutation vs subscription), not the HTTP method/URL.
-      const gqlCtx = GqlExecutionContext.create(context);
-      const info = gqlCtx.getInfo();
-      operationLabel = `[GraphQL] ${info.parentType.name}.${info.fieldName}`;
-    } else {
-      const req = context.switchToHttp().getRequest();
-      operationLabel = `[HTTP] ${req.method} ${req.url}`;
-    }
+    const req = context.switchToHttp().getRequest();
+    const operationLabel = `[HTTP] ${req.method} ${req.url}`;
 
     this.logger.debug({ operationLabel }, 'Incoming request');
 

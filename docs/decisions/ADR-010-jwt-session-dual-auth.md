@@ -29,7 +29,7 @@ Support both mechanisms as first-class, parallel auth flows:
 - Access token in `Authorization: Bearer` header (15-minute TTL)
 - Refresh token in `refresh_token` HttpOnly cookie
 - Rotation follows the token family model (ADR-002)
-- Used by all GraphQL resolvers and most REST endpoints
+- Used by most REST endpoints
 
 **Session flow** (`/auth/session/login`, `/auth/session/logout`):
 - `express-session` with `connect-pg-simple` as the PostgreSQL-backed store
@@ -69,8 +69,8 @@ activation if Passport-native session mode is needed.
 - Pros: Simple, well-understood; no token rotation logic
 - Cons: Every request hits the session store (PostgreSQL) — adds latency for
   high-throughput API paths; incompatible with the stateless horizontal scaling
-  goal for the API surface; GraphQL clients (SPAs) typically use Bearer tokens
-- Rejected: Session-store lookup on every GraphQL query is unnecessary overhead;
+  goal for the API surface; SPA/mobile clients typically use Bearer tokens
+- Rejected: Session-store lookup on every API request is unnecessary overhead;
   the API surface is designed for stateless clients
 
 ### Cookie-based JWT (JWT in HttpOnly cookie, no refresh rotation)
@@ -86,7 +86,7 @@ activation if Passport-native session mode is needed.
 - `express-session` + `connect-pg-simple` are required dependencies. The session table
   is created automatically on first boot (`createTableIfMissing: true`) — no manual
   migration needed.
-- The `JwtAuthGuard` covers both REST and GraphQL. Session endpoints are guarded
+- The `JwtAuthGuard` covers all REST routes. Session endpoints are guarded
   separately — `@Public()` is set on session routes because they use `req.session`
   directly, not the JWT guard's `req.user`.
 - Any new OAuth provider (e.g., Twitter, Apple) follows the same pattern: add a Passport

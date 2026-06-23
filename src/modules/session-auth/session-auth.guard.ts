@@ -1,5 +1,4 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Request } from 'express';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -70,9 +69,6 @@ export class SessionGuard implements CanActivate {
   }
 
   private getRequest(context: ExecutionContext): Request {
-    if (context.getType() === 'http') {
-      return context.switchToHttp().getRequest<Request>();
-    }
-    return GqlExecutionContext.create(context).getContext<{ req: Request }>().req;
+    return context.switchToHttp().getRequest<Request>();
   }
 }

@@ -1,4 +1,4 @@
-# Users — Profile & Admin (REST + GraphQL)
+# Users — Profile & Admin (REST)
 
 Set variables first:
 ```bash
@@ -8,9 +8,10 @@ ADMIN_TOKEN="<access token from admin account>"
 USER_ID="<target user id>"
 ```
 
----
+All user operations are REST under `/api/v1`. For authenticated requests, set
+header: `Authorization: Bearer $TOKEN`.
 
-## REST Endpoints
+---
 
 ### 1. Get own profile — JWT payload
 
@@ -25,57 +26,30 @@ curl -s $BASE/api/v1/auth/me \
 
 ---
 
-## GraphQL Queries & Mutations
-
-GraphQL endpoint: `POST http://localhost:3000/graphql`
-
-For all authenticated queries, set header: `Authorization: Bearer $TOKEN`
-
-**Postman GraphQL Setup:**
-- Method: **POST** → `{{baseUrl}}/graphql`
-- **Body** tab → select **GraphQL** (not raw). Postman fetches the schema automatically on first use.
-- **Authorization** tab → **Bearer Token** → `{{accessToken}}` (inherited from collection for all GraphQL requests).
-- In the GraphQL body editor, the left pane is the query, the right pane (Variables) is for `$variables`.
-- Alternatively use **raw** → **JSON** with `{"query":"...","variables":{}}` if you prefer.
-
----
-
 ### 2. Get own profile — full user object
 
+**GET** `/api/v1/users/me`
+
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"query { me { id email displayName roles isEmailVerified isActive avatarUrl lastLoginAt createdAt } }"}' | jq
+curl -s $BASE/api/v1/users/me \
+  -H "Authorization: Bearer $TOKEN" | jq
 ```
 
 **Expect:** Full `UserOutput` object. Confirm `password` is absent.
 
-**Postman:** GraphQL body:
-```graphql
-query {
-  me { id email displayName roles isEmailVerified isActive avatarUrl lastLoginAt createdAt }
-}
-```
-
 ---
 
-### 3. Get public user by ID
+### 3. Get user by ID (authenticated)
+
+**GET** `/api/v1/users/:id`
 
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -d "{\"query\":\"query { user(id: \\\"$USER_ID\\\") { id email displayName roles } }\"}" | jq
+curl -s $BASE/api/v1/users/$USER_ID \
+  -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-**Expect:** `200` with user or `null` if not found (no `401` — this is a public query).
-
-**Postman:** GraphQL body (no auth header needed):
-```graphql
-query {
-  user(id: "<USER_ID>") { id email displayName roles }
-}
-```
+**Expect:** `200` with the user, or `null` if not found. Without a token: `401`
+(not public — avoids email/role disclosure by ID enumeration).
 
 **Verify:** `password`, `lastLoginIp`, `twoFactorSecret` not present in response.
 
@@ -83,83 +57,56 @@ query {
 
 ### 4. Update own profile
 
+**PATCH** `/api/v1/users/me`
+
 ```bash
-curl -s -X POST $BASE/graphql \
+curl -s -X PATCH $BASE/api/v1/users/me \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"mutation { updateProfile(input: { displayName: \"Alice Updated\" }) { id displayName updatedAt } }"}' | jq
+  -d '{"displayName":"Alice Updated"}' | jq
 ```
 
 **Expect:** Updated user object with new `displayName` and refreshed `updatedAt`.
 
-**Postman:** GraphQL body:
-```graphql
-mutation {
-  updateProfile(input: { displayName: "Alice Updated" }) { id displayName updatedAt }
-}
-```
-
 **Verify:**
-- Cache key `users:id:<id>` invalidated (next `query { user }` fetches fresh data)
+- Cache key `users:id:<id>` invalidated (next `GET /users/:id` fetches fresh data)
 - `user.updated` event emitted (check SSE stream if connected — see [08-notifications.md](08-notifications.md))
 
-**Negative — update another user's profile:**
-```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"query\":\"mutation { updateProfile(input: { displayName: \\\"Hacked\\\" }) { id } }\"}" | jq
-# updateProfile always targets the current user (from JWT sub) — cannot target others
-```
+**Note:** `updateProfile` always targets the current user (from JWT `sub`) — it
+cannot target another user.
 
 ---
 
 ### 5. List all users (admin only)
 
+**GET** `/api/v1/users`
+
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d '{"query":"query { users { id email displayName roles isActive } }"}' | jq
+curl -s $BASE/api/v1/users \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 
 **Expect:** Array of all active users.
 
-**Postman:** Use `{{adminToken}}` as the Bearer Token (set it as a collection variable after logging in with an admin account). GraphQL body:
-```graphql
-query {
-  users { id email displayName roles isActive }
-}
-```
-
 **Negative — non-admin token:**
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"query { users { id email } }"}' | jq
-# Expect GraphQL error with extensions.code: "FORBIDDEN"
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/api/v1/users \
+  -H "Authorization: Bearer $TOKEN"
+# Expect 403 (errorCode "FORBIDDEN")
 ```
 
 ---
 
 ### 6. Deactivate user (admin only)
 
+**DELETE** `/api/v1/users/:id` (soft delete — sets `isActive=false`)
+
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d "{\"query\":\"mutation { deactivateUser(id: \\\"$USER_ID\\\") { id isActive } }\"}" | jq
+curl -s -X DELETE $BASE/api/v1/users/$USER_ID \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 
 **Expect:** `{ id: "...", isActive: false }`
-
-**Postman:** Bearer Token → `{{adminToken}}`. GraphQL body:
-```graphql
-mutation {
-  deactivateUser(id: "<USER_ID>") { id isActive }
-}
-```
 
 **Verify:**
 - Deactivated user can no longer authenticate:
@@ -178,13 +125,11 @@ curl -s $BASE/api/v1/auth/me -H "Authorization: Bearer $DEACTIVATED_USER_TOKEN" 
 
 ---
 
-### 7. GraphQL — unauthenticated access to protected query
+### 7. Unauthenticated access to a protected route
 
 ```bash
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -d '{"query":"query { me { id } }"}' | jq
-# Expect GraphQL error with extensions.code: "UNAUTHENTICATED"
+curl -s -o /dev/null -w "%{http_code}\n" $BASE/api/v1/users/me
+# Expect 401 (errorCode "UNAUTHENTICATED")
 ```
 
 ---
@@ -202,10 +147,7 @@ For every response type, verify these fields are absent:
 - `lastLoginIp`
 
 ```bash
-# Full introspection check
-curl -s -X POST $BASE/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"query { me { id email displayName roles isEmailVerified isActive avatarUrl lastLoginAt createdAt updatedAt } }"}' | jq 'keys'
-# None of the sensitive fields above should appear even if added to the query
+curl -s $BASE/api/v1/users/me \
+  -H "Authorization: Bearer $TOKEN" | jq 'keys'
+# None of the sensitive fields above should appear — UserOutput @Expose() allow-lists fields
 ```

@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ThrottlerException } from '@nestjs/throttler';
-import { GraphQLError } from 'graphql';
 import { Prisma } from '@prisma/client';
 import { GlobalExceptionFilter, ErrorCode } from './global-exception.filter';
 
@@ -57,8 +56,6 @@ const httpHost = (
   res,
 });
 
-const gqlHost = (): ArgumentsHost => ({ getType: () => 'graphql' }) as unknown as ArgumentsHost;
-
 const makePrismaError = (code: string, meta?: Record<string, unknown>) =>
   new Prisma.PrismaClientKnownRequestError('Prisma error', {
     code,
@@ -87,11 +84,6 @@ describe('GlobalExceptionFilter', () => {
   // ── Routing ───────────────────────────────────────────────────────────────
 
   describe('catch() routing', () => {
-    it('returns GraphQLError for graphql context', () => {
-      const result = filter.catch(new NotFoundException(), gqlHost());
-      expect(result).toBeInstanceOf(GraphQLError);
-    });
-
     it('calls response.json() for http context', () => {
       const { host, res } = httpHost();
       filter.catch(new NotFoundException(), host);
@@ -254,77 +246,6 @@ describe('GlobalExceptionFilter', () => {
         const { host, res } = httpHost();
         makeFilter('development').catch(new NotFoundException(), host);
         expect(res._body!.stack).toBeUndefined();
-      });
-    });
-  });
-
-  // ── GraphQL handler ───────────────────────────────────────────────────────
-
-  describe('GraphQL handler', () => {
-    const catchGql = (exception: unknown): GraphQLError =>
-      filter.catch(exception, gqlHost()) as GraphQLError;
-
-    it('returns a GraphQLError instance', () => {
-      expect(catchGql(new NotFoundException())).toBeInstanceOf(GraphQLError);
-    });
-
-    it('sets extensions.code', () => {
-      const err = catchGql(new UnauthorizedException());
-      expect(err.extensions.code).toBe(ErrorCode.UNAUTHENTICATED);
-    });
-
-    it('sets extensions.http.status', () => {
-      const err = catchGql(new NotFoundException());
-      expect((err.extensions.http as any).status).toBe(404);
-    });
-
-    it('masks internal 5xx message', () => {
-      const err = catchGql(new Error('secret crash details'));
-      expect(err.message).toBe('An internal server error occurred.');
-    });
-
-    it('exposes 4xx message directly', () => {
-      const err = catchGql(new NotFoundException('Item not found'));
-      expect(err.message).toContain('Item not found');
-    });
-
-    it('maps ThrottlerException → 429 RATE_LIMITED in GQL', () => {
-      const err = catchGql(new ThrottlerException());
-      expect((err.extensions.http as any).status).toBe(429);
-      expect(err.extensions.code).toBe(ErrorCode.RATE_LIMITED);
-    });
-
-    it('maps PrismaClientKnownRequestError P2002 → 409 CONFLICT in GQL', () => {
-      const err = catchGql(makePrismaError('P2002', { target: ['email'] }));
-      expect((err.extensions.http as any).status).toBe(409);
-      expect(err.extensions.code).toBe(ErrorCode.CONFLICT);
-    });
-
-    describe('dev vs prod — originalMessage', () => {
-      it('includes originalMessage in development for 5xx', () => {
-        const err = makeFilter('development').catch(
-          new Error('real crash message'),
-          gqlHost(),
-        ) as GraphQLError;
-        expect((err.extensions as any).originalMessage).toBe('real crash message');
-      });
-
-      it('omits originalMessage in production', () => {
-        const err = makeFilter('production').catch(
-          new Error('real crash message'),
-          gqlHost(),
-        ) as GraphQLError;
-        expect((err.extensions as any).originalMessage).toBeUndefined();
-      });
-
-      it('includes timestamp in development', () => {
-        const err = makeFilter('development').catch(new Error('crash'), gqlHost()) as GraphQLError;
-        expect((err.extensions as any).timestamp).toBeDefined();
-      });
-
-      it('omits timestamp in production', () => {
-        const err = makeFilter('production').catch(new Error('crash'), gqlHost()) as GraphQLError;
-        expect((err.extensions as any).timestamp).toBeUndefined();
       });
     });
   });

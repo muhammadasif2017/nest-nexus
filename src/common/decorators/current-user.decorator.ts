@@ -1,9 +1,8 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import { getRequestFromContext } from '../utils/execution-context.util';
 
-// A param decorator that extracts the current user from the request,
-// handling both HTTP (req.user) and GraphQL (context.req.user) contexts.
-// Usage in a resolver: getUserProfile(@CurrentUser() user: JwtPayload)
+// A param decorator that extracts the current user (req.user) from the request.
+// Usage in a controller: getProfile(@CurrentUser() user: JwtPayload)
 export const CurrentUser = createParamDecorator(
   (data: string | undefined, context: ExecutionContext) => {
     // Guards have already run by the time this decorator fires, so

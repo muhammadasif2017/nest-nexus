@@ -8,13 +8,11 @@ import {
   Injectable,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { GqlExceptionFilter } from '@nestjs/graphql';
-import { GraphQLError } from 'graphql';
 import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 
 // ── Custom Error Codes ──────────────────────────────────────────────────────
-// These become the `extensions.code` field in GraphQL errors.
+// These become the `errorCode` field in the REST error envelope.
 // Clients can switch on these codes for precise error handling,
 // rather than parsing brittle human-readable message strings.
 export enum ErrorCode {
@@ -32,7 +30,7 @@ export enum ErrorCode {
 // Node.js stack trace to the client.
 @Injectable()
 @Catch()
-export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilter {
+export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);
   private readonly isDev: boolean;
 
@@ -41,57 +39,7 @@ export class GlobalExceptionFilter implements ExceptionFilter, GqlExceptionFilte
   }
 
   catch(exception: unknown, host: ArgumentsHost): any {
-    // ── Determine execution context ─────────────────────────────────────────
-    // host.getType() returns 'http', 'graphql', 'ws', or 'rpc'.
-    // We branch here because the error response format is fundamentally different.
-    const contextType = host.getType<string>();
-
-    if (contextType === 'graphql') {
-      return this.handleGraphQLError(exception);
-    }
-
-    // Default: treat as HTTP (covers 'http' and unknown contexts)
     return this.handleHttpError(exception, host);
-  }
-
-  // ── GraphQL Error Handler ──────────────────────────────────────────────────
-  // In GraphQL, we don't touch the HTTP response. Instead, we return a
-  // GraphQLError object. Apollo will wrap it in the `errors` array automatically.
-  private handleGraphQLError(exception: unknown): GraphQLError {
-    const { message, code, statusCode } = this.normalizeException(exception);
-    const isInternal = this.isInternalError(statusCode);
-
-    // Log internal errors with full stack traces for debugging.
-    // For client errors (4xx), a warn log is sufficient — they're expected.
-    if (isInternal) {
-      this.logger.error(
-        `[GraphQL] Unhandled exception: ${message}`,
-        exception instanceof Error ? exception.stack : undefined,
-      );
-    } else {
-      this.logger.warn(`[GraphQL] Client error: ${code} - ${message}`);
-    }
-
-    return new GraphQLError(
-      // Never expose internal error details to clients — use a generic message.
-      // This prevents accidental leakage of database structure, file paths, etc.
-      isInternal ? 'An internal server error occurred.' : message,
-      {
-        extensions: {
-          code,
-          // http.status lets Apollo Server set the correct HTTP status even
-          // though GraphQL responses are always 200 by default. Some clients
-          // (like Apollo Client) use this for retry logic.
-          http: { status: statusCode },
-          // Only include a timestamp in dev for easier debugging
-          ...(this.isDev && {
-            timestamp: new Date().toISOString(),
-            // Expose the original message in dev so you can debug quickly
-            originalMessage: message,
-          }),
-        },
-      },
-    );
   }
 
   // ── HTTP Error Handler ─────────────────────────────────────────────────────

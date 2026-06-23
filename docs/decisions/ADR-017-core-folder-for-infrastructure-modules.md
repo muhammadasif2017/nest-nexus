@@ -38,9 +38,10 @@ src/core/
 └── storage/      StorageService, ImageService, ClamAvService, UploadController
 ```
 
-`src/graphql/` (Apollo/schema wiring) stays at top level — it's transport-layer
-wiring for the API surface itself, not an injectable infra singleton consumed
-by other modules, so it doesn't fit the same category.
+At the time, `src/graphql/` (Apollo/schema wiring) stayed at top level — it was
+transport-layer wiring for the API surface, not an injectable infra singleton, so
+it didn't fit the same category. (GraphQL was later removed entirely — see ADR-003,
+now superseded — so this folder no longer exists.)
 
 All relative imports referencing the moved folders (both inbound from
 `modules/*` and `app.module.ts`/`main.ts`, and outbound from the moved files
@@ -76,8 +77,9 @@ verified via `tsc --noEmit`, `eslint`, full Jest suite (556 tests), and
 - New infra singletons (e.g. a future mail service, S3-compatible alt
   storage) belong in `src/core/<name>/`, not flat under `src/`.
 - `src/` top level now only has: `app.module.ts`, `main.ts`, `common/`,
-  `config/`, `core/`, `graphql/`, `modules/`, `schema.graphql` — a much
-  shorter, more legible index of what kind of thing each folder is.
+  `config/`, `core/`, `modules/` — a much shorter, more legible index of what
+  kind of thing each folder is. (`graphql/` and `schema.graphql` were removed
+  when GraphQL was dropped.)
 - No path aliases exist in `tsconfig.json` (pure relative imports), so any
   future folder move repeats this same import-fixing exercise. Worth
   reconsidering path aliases (`@core/*`, `@modules/*`) if more moves like

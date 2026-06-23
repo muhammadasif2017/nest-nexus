@@ -14,8 +14,7 @@ flows are tested against production-shaped concerns rather than a toy harness.
 
 This is a reference implementation, not a clone-and-start template — there is
 deliberately no business domain, because the subject *is* authentication. The
-GraphQL layer exists to exercise GraphQL patterns (code-first schema,
-DataLoaders, dual REST/GraphQL guards) — a practice exercise, not a domain requirement.
+API surface is REST, documented with OpenAPI/Swagger.
 
 ---
 
@@ -26,7 +25,7 @@ DataLoaders, dual REST/GraphQL guards) — a practice exercise, not a domain req
 | **Framework** | NestJS 11 | Module system, DI container, decorators |
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
 | **Query Insights** | @prisma/sqlcommenter | SQL comment annotations for Cloud SQL Query Insights |
-| **API** | GraphQL (Apollo) + REST | Dual API surface, code-first schema |
+| **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
 | **Real-time** | Socket.io + SSE | WebSocket gateway + server-sent events |
 | **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
@@ -112,9 +111,6 @@ npm run build && npm start
 # Health check
 curl http://localhost:3000/api/v1/health/ready
 
-# GraphQL Playground
-open http://localhost:3000/graphql
-
 # Swagger API docs
 open http://localhost:3000/api/docs
 
@@ -153,8 +149,8 @@ src/
 ├── common/                          # Shared, zero-business-logic primitives
 │   ├── decorators/                  # @CurrentUser(), @Roles(), @Public(), @AllowPending2FA()
 │   ├── enums/                       # Role enum
-│   ├── filters/                     # GlobalExceptionFilter (REST + GraphQL aware)
-│   ├── guards/                      # JwtAuthGuard, RolesGuard (both context-aware)
+│   ├── filters/                     # GlobalExceptionFilter (consistent REST envelope)
+│   ├── guards/                      # JwtAuthGuard, RolesGuard
 │   └── interceptors/                # LoggingInterceptor, SerializeInterceptor
 │
 ├── core/                            # Infrastructure modules
@@ -170,13 +166,10 @@ src/
 │   ├── health/                      # Terminus liveness + readiness + deep checks
 │   └── metrics/                     # Prometheus metrics + HTTP interceptor
 │
-├── graphql/                         # GraphQLModule configuration
-├── schema.graphql                   # Generated code-first schema (committed)
-│
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
     ├── session-auth/                # Server-side session login (separate module)
-    ├── users/                       # DataLoader, serialization
+    ├── users/                       # REST controller, serialization
     └── notifications/               # WebSocket gateway, SSE, fan-out delivery
 
 prisma/
@@ -217,20 +210,17 @@ FK to `User`. Cost 8 (vs 12 for passwords) is intentional: cryptographically ran
 derive their brute-force resistance from entropy, not work factor — keeping rotation latency
 low while remaining storage-safe against database compromise.
 
-### Guards are context-aware
+### Guards read the request uniformly
 
-`JwtAuthGuard` and `RolesGuard` both override `getRequest()` to handle GraphQL's nested
-context structure alongside standard HTTP. The same guard works on REST controllers,
-GraphQL resolvers, and returns the correct `req.user` from both. WebSocket connections
-handle authentication manually in `handleConnection()` because HTTP guards don't run
-after the WebSocket upgrade.
+`JwtAuthGuard` and `RolesGuard` resolve `req.user` through a shared helper, so the same
+guard works across every REST controller. WebSocket connections handle authentication
+manually in `handleConnection()` because HTTP guards don't run after the WebSocket upgrade.
 
-### The exception filter speaks two languages
+### The exception filter returns one consistent envelope
 
-A single `GlobalExceptionFilter` handles both REST and GraphQL. For HTTP contexts it sets
-the response status code and returns a consistent JSON envelope. For GraphQL contexts it
-returns a `GraphQLError` with structured `extensions.code` — because GraphQL always returns
-HTTP 200, and error information travels in the response body.
+A single `GlobalExceptionFilter` catches everything and returns a consistent JSON envelope:
+status code, `errorCode`, message, path, and timestamp. Internal 5xx details are masked in
+production so stack traces and database structure never leak to clients.
 
 Prisma errors are translated automatically: `P2002` (unique constraint) → 409 Conflict,
 `P2025` (record not found on update/delete) → 404 Not Found.
@@ -280,7 +270,7 @@ dead-letter jobs without touching the database directly.
 ### JWT Login
 
 ```
-POST /api/v1/auth/login (REST only — no GraphQL mutation)
+POST /api/v1/auth/login
   → AuthService validates credentials (timing-safe bcrypt)
   → TokenService issues access token (15m) + refresh token (7d)
   → Access token → response body (store in memory, not localStorage)
@@ -510,7 +500,7 @@ module purely to illustrate the pattern; no business domain actually exists.
 # NestJS CLI generates the module scaffold
 nest generate module modules/orders
 nest generate service modules/orders
-nest generate resolver modules/orders   # For GraphQL
+nest generate controller modules/orders
 ```
 
 Follow the existing module pattern:
@@ -518,10 +508,10 @@ Follow the existing module pattern:
 1. Add the model to `prisma/schema.prisma`
 2. Run `npx prisma migrate dev --name add-orders` to generate and apply the migration
 3. Define input DTOs in `dto/` with class-validator decorators
-4. Define the output DTO in `dto/` with `@Expose()` and `@ObjectType()`
+4. Define the output DTO in `dto/` with `@Expose()`
 5. Implement the service — inject `PrismaService` directly (it's `@Global()`)
 6. Emit domain events via `EventEmitter2` after every mutation
-7. Implement the resolver or controller
+7. Implement the controller
 8. Register the module in `app.module.ts`
 
 ### Adding a new queue
@@ -548,7 +538,7 @@ Follow the existing module pattern:
 Before deploying to production, verify:
 
 - [ ] All secrets in `.env` are unique, random, and at least 32 characters
-- [ ] `NODE_ENV=production` is set (enables HTTPS-only cookies, strict CSP, removes Apollo Sandbox)
+- [ ] `NODE_ENV=production` is set (enables HTTPS-only cookies, strict CSP, removes Swagger UI and Bull Board)
 - [ ] PostgreSQL is not publicly accessible (firewall rules or VPC)
 - [ ] Redis is password-protected (`requirepass` in `redis.conf`)
 - [ ] S3 bucket blocks public access except for explicitly public prefixes

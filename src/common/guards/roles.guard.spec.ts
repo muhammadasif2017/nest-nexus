@@ -1,12 +1,7 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { GqlExecutionContext } from '@nestjs/graphql';
 import { RolesGuard } from './roles.guard';
 import { Role } from '../enums/role.enum';
-
-jest.mock('@nestjs/graphql', () => ({
-  GqlExecutionContext: { create: jest.fn() },
-}));
 
 const mockReflector = (roles: Role[] | undefined) =>
   ({
@@ -21,30 +16,11 @@ const httpContext = (user: unknown): ExecutionContext =>
     switchToHttp: () => ({ getRequest: () => ({ user }) }),
   }) as unknown as ExecutionContext;
 
-const gqlContext = (user: unknown): ExecutionContext => {
-  const ctx = {
-    getType: () => 'graphql',
-    getHandler: () => ({}),
-    getClass: () => ({}),
-  } as unknown as ExecutionContext;
-
-  (GqlExecutionContext.create as jest.Mock).mockReturnValue({
-    getContext: () => ({ req: { user } }),
-  });
-
-  return ctx;
-};
-
 describe('RolesGuard', () => {
   describe('no @Roles() decorator', () => {
     it('allows HTTP request when no roles required', () => {
       const guard = new RolesGuard(mockReflector(undefined));
       expect(guard.canActivate(httpContext(null))).toBe(true);
-    });
-
-    it('allows GraphQL request when no roles required', () => {
-      const guard = new RolesGuard(mockReflector(undefined));
-      expect(guard.canActivate(gqlContext(null))).toBe(true);
     });
 
     it('allows when roles array is empty', () => {
@@ -104,37 +80,6 @@ describe('RolesGuard', () => {
       const guard = new RolesGuard(mockReflector([Role.MODERATOR]));
       const user = { roles: [Role.USER, Role.MODERATOR] };
       expect(guard.canActivate(httpContext(user))).toBe(true);
-    });
-  });
-
-  describe('GraphQL context', () => {
-    it('allows user with matching role', () => {
-      const guard = new RolesGuard(mockReflector([Role.ADMIN]));
-      const user = { roles: [Role.ADMIN] };
-      expect(guard.canActivate(gqlContext(user))).toBe(true);
-    });
-
-    it('denies user without required role', () => {
-      const guard = new RolesGuard(mockReflector([Role.ADMIN]));
-      const user = { roles: [Role.USER] };
-      expect(guard.canActivate(gqlContext(user))).toBe(false);
-    });
-
-    it('allows when user has one of multiple required roles', () => {
-      const guard = new RolesGuard(mockReflector([Role.ADMIN, Role.SUPER_ADMIN]));
-      const user = { roles: [Role.SUPER_ADMIN] };
-      expect(guard.canActivate(gqlContext(user))).toBe(true);
-    });
-
-    it('denies when user is null', () => {
-      const guard = new RolesGuard(mockReflector([Role.ADMIN]));
-      expect(guard.canActivate(gqlContext(null))).toBe(false);
-    });
-
-    it('denies when user has no roles property', () => {
-      const guard = new RolesGuard(mockReflector([Role.ADMIN]));
-      const user = { email: 'user@test.com' };
-      expect(guard.canActivate(gqlContext(user))).toBe(false);
     });
   });
 

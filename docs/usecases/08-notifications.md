@@ -41,10 +41,10 @@ data: {"type":"connected","userId":"<id>"}
 In a second terminal, update your profile:
 
 ```bash
-curl -s -X POST http://localhost:3000/graphql \
+curl -s -X PATCH http://localhost:3000/api/v1/users/me \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"mutation { updateProfile(input: { displayName: \"SSE Test\" }) { id } }"}' | jq
+  -d '{"displayName":"SSE Test"}' | jq
 ```
 
 **Expect in the SSE terminal:**
@@ -53,7 +53,7 @@ event: user:updated
 data: {"userId":"<id>"}
 ```
 
-**Postman:** Keep the SSE request open in one tab. In a second tab, send the `updateProfile` mutation (see [06-users.md](06-users.md) scenario 4) — the SSE tab should show the `user:updated` event appear within ~1 second.
+**Postman:** Keep the SSE request open in one tab. In a second tab, send the `PATCH /users/me` request (see [06-users.md](06-users.md) scenario 4) — the SSE tab should show the `user:updated` event appear within ~1 second.
 
 ---
 
@@ -62,10 +62,8 @@ data: {"userId":"<id>"}
 In a second terminal (as admin):
 
 ```bash
-curl -s -X POST http://localhost:3000/graphql \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -d "{\"query\":\"mutation { deactivateUser(id: \\\"$USER_ID\\\") { id } }\"}" | jq
+curl -s -X DELETE http://localhost:3000/api/v1/users/$USER_ID \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq
 ```
 
 **Expect in the SSE terminal:**
@@ -102,10 +100,10 @@ curl -N --no-buffer http://localhost:3000/api/v1/notifications/stream \
   -H "Authorization: Bearer $TOKEN" &
 
 # Trigger update
-curl -s -X POST http://localhost:3000/graphql \
+curl -s -X PATCH http://localhost:3000/api/v1/users/me \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
-  -d '{"query":"mutation { updateProfile(input: { displayName: \"Multi\" }) { id } }"}' | jq
+  -d '{"displayName":"Multi"}' | jq
 ```
 
 **Expect:** Both terminals receive the `user:updated` event.

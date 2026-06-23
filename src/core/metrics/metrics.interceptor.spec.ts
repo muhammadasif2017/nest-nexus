@@ -35,7 +35,7 @@ const httpContext = (
 
 const nonHttpContext = (): ExecutionContext =>
   ({
-    getType: () => 'graphql',
+    getType: () => 'ws',
   }) as unknown as ExecutionContext;
 
 describe('MetricsInterceptor', () => {

@@ -7,12 +7,11 @@ Accepted
 2026-06-15
 
 ## Context
-The project exposes REST endpoints at `/api/v1/auth/*` (see ADR-003 for the
-REST/GraphQL boundary). GraphQL has built-in introspection and a Playground UI,
-but REST has no equivalent — developers must rely on reading source code or
-maintaining separate Postman collections. The auth surface is non-trivial:
-two auth flows (JWT + session), two refresh mechanisms, and HttpOnly cookie
-semantics that are easy to misconfigure in clients.
+The project exposes REST endpoints at `/api/v1/*`. Without generated
+documentation, developers must rely on reading source code or maintaining
+separate Postman collections. The auth surface is non-trivial: two auth flows
+(JWT + session), two refresh mechanisms, and HttpOnly cookie semantics that are
+easy to misconfigure in clients.
 
 ## Decision
 Add `@nestjs/swagger` to generate an OpenAPI 3.0 specification from decorator
@@ -20,8 +19,8 @@ metadata. The Swagger UI is served at `/api/docs` **in non-production environmen
 only**.
 
 Key design choices:
-- `@ApiProperty()` decorators added to DTOs alongside existing `@InputType()` /
-  `@ObjectType()` GraphQL decorators — single source of truth for each DTO.
+- `@ApiProperty()` decorators on DTO fields alongside class-validator decorators —
+  single source of truth for each DTO's shape, validation, and documentation.
 - Two auth schemes registered: `BearerAuth` (JWT access token) and
   `CookieAuth` (refresh token HttpOnly cookie). Each endpoint declares which
   scheme it uses via `@ApiBearerAuth` / `@ApiCookieAuth`.
@@ -58,8 +57,6 @@ Key design choices:
 - Every new REST controller needs `@ApiTags`, `@ApiOperation`, and
   `@ApiResponse` decorators.
 - Every DTO used by a REST controller needs `@ApiProperty()` on each field.
-- GraphQL-only DTOs do not need `@ApiProperty()`.
-- Helmet CSP is already disabled in non-production (for GraphQL Playground) —
-  Swagger UI requires the same relaxation, so no additional Helmet config needed.
-- The `src/schema.graphql` file (auto-generated at boot) and the OpenAPI spec
-  at `/api/docs/json` together form the full API contract for the project.
+- Helmet CSP is disabled in non-production so the Swagger UI can load its inline
+  scripts — no additional Helmet config needed.
+- The OpenAPI spec at `/api/docs/json` is the full API contract for the project.
