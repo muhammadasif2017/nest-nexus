@@ -11,7 +11,6 @@ import databaseConfig from './config/database.config';
 import redisConfig from './config/redis.config';
 import jwtConfig from './config/jwt.config';
 import oauthConfig from './config/oauth.config';
-import storageConfig from './config/storage.config';
 import smtpConfig from './config/smtp.config';
 import { configValidationSchema } from './config/config.validation'; // Zod schema
 
@@ -28,7 +27,6 @@ import { MetricsModule } from './core/metrics/metrics.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
-import { StorageModule } from './core/storage/storage.module';
 
 @Module({
   imports: [
@@ -37,15 +35,7 @@ import { StorageModule } from './core/storage/storage.module';
     // validationSchema applies Zod/Joi at startup — fail fast if env is misconfigured
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [
-        appConfig,
-        databaseConfig,
-        redisConfig,
-        jwtConfig,
-        oauthConfig,
-        storageConfig,
-        smtpConfig,
-      ],
+      load: [appConfig, databaseConfig, redisConfig, jwtConfig, oauthConfig, smtpConfig],
       validate: configValidationSchema, // Throws on startup if .env is invalid
       cache: true, // Caches parsed config in memory — minor perf win
     }),
@@ -88,7 +78,6 @@ import { StorageModule } from './core/storage/storage.module';
     AuthModule,
     SessionAuthModule,
     UsersModule,
-    StorageModule,
   ],
 
   providers: [
