@@ -184,7 +184,9 @@ describe('AuthService', () => {
       const { service, prisma, tokenService } = makeService();
       prisma.user.findUnique.mockResolvedValue(null);
       await service.register(dto);
-      expect(tokenService.generateRefreshToken).toHaveBeenCalledWith('user-id-1');
+      expect(tokenService.generateRefreshToken).toHaveBeenCalledWith('user-id-1', {
+        userAgent: undefined,
+      });
     });
   });
 

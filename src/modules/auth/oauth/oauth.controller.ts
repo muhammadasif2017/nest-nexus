@@ -69,7 +69,10 @@ export class OAuthController {
 
   // Fragment (#) is not sent to the server or logged by proxies — safer than a query param.
   private async handleOAuthCallback(req: Request, res: Response): Promise<void> {
-    const { auth, refreshToken } = await this.authService.oauthLogin(req.user as OAuthProfile);
+    const { auth, refreshToken } = await this.authService.oauthLogin(
+      req.user as OAuthProfile,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     const clientOrigin = this.config.get<string>('app.clientOrigin');
     res.redirect(`${clientOrigin}/oauth/success#token=${auth.accessToken}`);

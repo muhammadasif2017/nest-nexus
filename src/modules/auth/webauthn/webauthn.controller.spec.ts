@@ -27,6 +27,7 @@ const makeWebauthnServiceMock = () => ({
 });
 
 const makeRes = () => ({ cookie: jest.fn() });
+const makeReq = () => ({ headers: { 'user-agent': 'test-agent' } });
 
 const makeController = () => {
   const authService = makeAuthServiceMock();
@@ -78,11 +79,12 @@ describe('WebauthnController', () => {
     it('issues a full token pair and sets the refresh cookie on success', async () => {
       const { controller, webauthnService, authService, tokenService } = makeController();
       webauthnService.loginVerify.mockResolvedValue('user-id-1');
+      const req = makeReq();
       const res = makeRes();
       const dto = { email: 'alice@test.com', response: { id: 'cred-1' } as any };
-      const result = await controller.loginVerify(dto, res as any);
+      const result = await controller.loginVerify(dto, req as any, res as any);
       expect(webauthnService.loginVerify).toHaveBeenCalledWith('alice@test.com', dto.response);
-      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1');
+      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1', 'test-agent');
       expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', { httpOnly: true });
       expect(result).toBe(mockAuthOutput);
@@ -114,11 +116,12 @@ describe('WebauthnController', () => {
     it('issues a full token pair and sets the refresh cookie on success', async () => {
       const { controller, webauthnService, authService, tokenService } = makeController();
       webauthnService.signupVerify.mockResolvedValue('new-user-1');
+      const req = makeReq();
       const res = makeRes();
       const dto = { email: 'alice@test.com', response: { id: 'cred-1' } as any };
-      const result = await controller.signupVerify(dto, res as any);
+      const result = await controller.signupVerify(dto, req as any, res as any);
       expect(webauthnService.signupVerify).toHaveBeenCalledWith('alice@test.com', dto.response);
-      expect(authService.issueTokens).toHaveBeenCalledWith('new-user-1');
+      expect(authService.issueTokens).toHaveBeenCalledWith('new-user-1', 'test-agent');
       expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', { httpOnly: true });
       expect(result).toBe(mockAuthOutput);

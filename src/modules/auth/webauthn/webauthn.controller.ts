@@ -1,6 +1,6 @@
-import { Controller, Post, Delete, Body, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Delete, Body, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
 import { WebauthnService } from './webauthn.service';
@@ -60,10 +60,14 @@ export class WebauthnController {
   @ApiResponse({ status: 401, description: 'Invalid assertion or no passkey registered.' })
   async loginVerify(
     @Body() dto: WebauthnLoginVerifyInput,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthOutput> {
     const userId = await this.webauthnService.loginVerify(dto.email, dto.response);
-    const { auth, refreshToken } = await this.authService.issueTokens(userId);
+    const { auth, refreshToken } = await this.authService.issueTokens(
+      userId,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
@@ -105,10 +109,14 @@ export class WebauthnController {
   @ApiResponse({ status: 401, description: 'Invalid registration response.' })
   async signupVerify(
     @Body() dto: WebauthnSignupVerifyInput,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthOutput> {
     const userId = await this.webauthnService.signupVerify(dto.email, dto.response);
-    const { auth, refreshToken } = await this.authService.issueTokens(userId);
+    const { auth, refreshToken } = await this.authService.issueTokens(
+      userId,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }

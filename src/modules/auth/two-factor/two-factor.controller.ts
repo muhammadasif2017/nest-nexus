@@ -2,13 +2,14 @@ import {
   Controller,
   Post,
   Body,
+  Req,
   Res,
   HttpCode,
   HttpStatus,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
 import { TwoFactorService } from './two-factor.service';
@@ -83,12 +84,16 @@ export class TwoFactorController {
   async verify(
     @CurrentUser() user: JwtPayload,
     @Body() dto: TwoFactorCodeInput,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthOutput> {
     const isValid = await this.twoFactorService.verify(user.sub, dto.code);
     if (!isValid) throw new UnauthorizedException('Invalid 2FA code.');
 
-    const { auth, refreshToken } = await this.authService.issueTokens(user.sub);
+    const { auth, refreshToken } = await this.authService.issueTokens(
+      user.sub,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }

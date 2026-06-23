@@ -53,9 +53,13 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Validation failed.' })
   @ApiResponse({ status: 409, description: 'Email already in use.' })
   @ApiResponse({ status: 429, description: 'Rate limit exceeded (5 per 10 min).' })
-  async register(@Body() dto: RegisterInput, @Res({ passthrough: true }) res: Response) {
+  async register(
+    @Body() dto: RegisterInput,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     // passthrough: true on @Res() means NestJS still handles the response serialization
-    const { auth, refreshToken } = await this.authService.register(dto);
+    const { auth, refreshToken } = await this.authService.register(dto, req.headers['user-agent']);
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
@@ -77,7 +81,11 @@ export class AuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { auth, refreshToken } = await this.authService.login(dto, req.ip);
+    const { auth, refreshToken } = await this.authService.login(
+      dto,
+      req.ip,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
