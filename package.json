@@ -31,7 +31,6 @@
     "@bull-board/express": "^5.19.1",
     "@keyv/redis": "^4.0.0",
     "@nestjs-modules/ioredis": "^2.0.2",
-    "@nestjs/apollo": "^13.4.2",
     "@nestjs/axios": "^4.0.0",
     "@nestjs/bullmq": "^11.0.4",
     "@nestjs/cache-manager": "^3.1.3",
