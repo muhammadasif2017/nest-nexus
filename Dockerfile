@@ -2,7 +2,7 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# bcrypt and sharp compile/link native bindings on install.
+# bcrypt compiles/links native bindings on install.
 RUN apk add --no-cache python3 make g++
 
 COPY package.json package-lock.json .npmrc ./
