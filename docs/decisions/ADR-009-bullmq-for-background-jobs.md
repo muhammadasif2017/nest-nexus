@@ -8,7 +8,7 @@ Accepted
 
 ## Context
 The project requires async job processing for:
-- Email delivery (magic links, notifications) — must survive process restarts
+- Email delivery (magic links, account emails) — must survive process restarts
 - Scheduled cleanup (expired tokens, stale records) — separate concern from cron
 - Any future long-running work that should not block an HTTP request
 
