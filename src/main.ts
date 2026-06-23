@@ -8,7 +8,6 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { RedisIoAdapter } from './modules/notifications/redis-io.adapter';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
@@ -44,14 +43,6 @@ async function bootstrap() {
   const CLIENT_ORIGIN = config.get<string>('app.clientOrigin');
 
   app.useLogger(app.get(Logger));
-
-  const redisIoAdapter = new RedisIoAdapter(app);
-  await redisIoAdapter.connectToRedis({
-    host: config.get<string>('redis.host') ?? 'localhost',
-    port: config.get<number>('redis.port') ?? 6379,
-    password: config.get<string | undefined>('redis.password'),
-  });
-  app.useWebSocketAdapter(redisIoAdapter);
 
   // Credentials: true is required for cookies (sessions) to be sent cross-origin.
   app.enableCors({
@@ -201,9 +192,7 @@ async function bootstrap() {
   // NestJS shutdown hooks handle SIGTERM/SIGINT for the app itself; the pool
   // is a local variable here so it needs its own cleanup handler.
   app.enableShutdownHooks();
-  ['SIGTERM', 'SIGINT'].forEach((sig) =>
-    process.once(sig, () => Promise.all([pgPool.end(), redisIoAdapter.close()])),
-  );
+  ['SIGTERM', 'SIGINT'].forEach((sig) => process.once(sig, () => pgPool.end()));
 
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);

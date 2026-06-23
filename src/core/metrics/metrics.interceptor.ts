@@ -13,7 +13,7 @@ export class MetricsInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    // Only instrument HTTP — WebSocket events have a different cardinality profile
+    // Only instrument HTTP requests — skip any non-HTTP execution context
     if (context.getType<string>() !== 'http') return next.handle();
 
     const req = context.switchToHttp().getRequest<Request>();

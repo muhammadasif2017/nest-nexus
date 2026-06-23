@@ -28,7 +28,6 @@ import { MetricsModule } from './core/metrics/metrics.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
-import { NotificationsModule } from './modules/notifications/notification.module';
 import { StorageModule } from './core/storage/storage.module';
 
 @Module({
@@ -89,7 +88,6 @@ import { StorageModule } from './core/storage/storage.module';
     AuthModule,
     SessionAuthModule,
     UsersModule,
-    NotificationsModule,
     StorageModule,
   ],
 

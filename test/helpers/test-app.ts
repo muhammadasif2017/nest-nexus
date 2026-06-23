@@ -13,7 +13,7 @@ import { PrismaService } from '../../src/core/prisma/prisma.service';
 
 // Mirrors the request pipeline wired in src/main.ts (validation, serialization,
 // cookie parsing, helmet, CORS) minus dev-only wiring (Swagger, Bull Board) and
-// infra not needed for these HTTP-level assertions (sessions, CSRF, websockets).
+// infra not needed for these HTTP-level assertions (sessions, CSRF).
 export async function createTestApp(): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
