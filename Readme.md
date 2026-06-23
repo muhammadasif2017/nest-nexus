@@ -8,7 +8,7 @@ sessions — alongside a hardened JWT core with refresh-token rotation and
 family-based reuse detection.
 
 The auth lives in a realistic setting: Postgres/Prisma, Redis, BullMQ queues
-with dead-letter handling, S3 storage, and a full Prometheus/Grafana
+with dead-letter handling and a full Prometheus/Grafana
 observability stack — the infrastructure a real service runs on, so the auth
 flows are tested against production-shaped concerns rather than a toy harness.
 
@@ -32,9 +32,6 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Cache** | Redis (ioredis) | Application cache + BullMQ backbone |
 | **Queues** | BullMQ | Background jobs, retries, dead-letter |
 | **Scheduler** | @nestjs/schedule | Cron jobs with distributed locking |
-| **Storage** | AWS S3 / MinIO | Direct upload, ownership-scoped delete, presigned GET URLs |
-| **Images** | Sharp | Avatar resize to WebP, magic-byte type validation |
-| **Scanning** | ClamAV | Inline virus scanning of uploads before storage |
 | **Security** | Helmet, CSRF, Throttler | Layered HTTP security hardening |
 | **Observability** | Prometheus + Grafana | Metrics, dashboards, alerting rules |
 | **Health** | Terminus | Kubernetes-ready liveness/readiness probes |
@@ -78,8 +75,8 @@ Everything else has a safe default for local development.
 ### 3. Start the infrastructure
 
 ```bash
-# Start PostgreSQL, Redis, MinIO, and ClamAV
-docker-compose up -d postgres redis minio clamav
+# Start PostgreSQL and Redis
+docker-compose up -d postgres redis
 
 # Verify all services are healthy
 docker-compose ps
@@ -141,7 +138,6 @@ src/
 │   ├── redis.config.ts
 │   ├── jwt.config.ts
 │   ├── oauth.config.ts
-│   ├── storage.config.ts
 │   ├── alerts.config.ts
 │   └── config.validation.ts         # Zod schema — app refuses to start if invalid
 │
@@ -160,7 +156,6 @@ src/
 │   ├── events/                      # EventEmitter2 (wildcard, global)
 │   ├── queues/                      # BullMQ email queue, processor, dead-letter
 │   ├── scheduler/                   # Cron jobs with distributed Redis locking
-│   ├── storage/                     # S3/MinIO abstraction, Sharp, ClamAV
 │   ├── mailer/                      # Email sending
 │   ├── health/                      # Terminus liveness + readiness + deep checks
 │   └── metrics/                     # Prometheus metrics + HTTP interceptor
@@ -237,20 +232,6 @@ Every `@Cron()` handler acquires a Redis lock before doing any work. The lock us
 (atomic compare-and-delete). If the lock is already held by another instance, the handler
 logs and returns immediately. This eliminates duplicate work and phantom concurrency bugs
 in horizontally scaled deployments.
-
-### File uploads are virus-scanned before storage
-
-Two endpoints, both JWT-protected. File bytes flow through NestJS → S3 (direct upload):
-
-- **`POST /upload/avatar`** (max 5MB): ClamAV scan → Sharp resize to a 256×256 WebP →
-  upload to `avatars/{userId}/`. Image type is validated by **magic bytes**, not the
-  client-supplied `Content-Type`.
-- **`POST /upload/file`** (max 20MB): ClamAV scan → store as-is under `uploads/{userId}/`.
-- **`DELETE /upload/*`**: ownership-checked — the key must be prefixed with the caller's
-  own `avatars/{userId}/` or `uploads/{userId}/`, else `403`.
-
-The `StorageService` wraps S3 (or MinIO locally) and can also issue presigned GET URLs for
-reads. Files are not tracked in a database table — the S3 key is the record.
 
 ### BullMQ jobs have a two-layer failure strategy
 
@@ -330,27 +311,11 @@ Worker.process()
 ### Queues
 
 One queue is implemented: `email` (concurrency 5), handling welcome, password-reset,
-email-verification, 2FA-code, and magic-link messages. Virus scanning and avatar
-processing run **synchronously** in the upload request, not via queues.
+email-verification, 2FA-code, and magic-link messages.
 
 | Queue | Concurrency | Purpose |
 |---|---|---|
 | `email` | 5 | Welcome, password reset, email verification, 2FA code, magic link |
-
----
-
-## Image Processing
-
-`ImageService` (Sharp) handles avatar uploads:
-
-- **Magic-byte validation** — the file's real type is read from its leading bytes,
-  not trusted from the client `Content-Type` (JPEG/PNG/GIF/WebP allowed).
-- **Avatar resize** — 256×256, `fit: cover`, re-encoded to WebP (quality 80).
-- A generic `resize(width, height)` helper (aspect-preserved WebP) is also available
-  for other callers.
-
-Sharp re-encodes to WebP, which drops the original EXIF in the process. Multi-variant
-generation and LQIP placeholders are not implemented.
 
 ---
 
@@ -402,7 +367,6 @@ Optional variables enable additional features:
 GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET    # Enables Google OAuth
 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET    # Enables GitHub OAuth
 MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET # Enables Microsoft OAuth
-AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY  # Enables real S3 (MinIO used otherwise)
 ALERTS_WEBHOOK_URL                         # Enables Slack/webhook job failure alerts
 ```
 
@@ -436,7 +400,7 @@ npx prisma generate             # Regenerate the Prisma client after schema chan
 docker-compose up -d
 
 # Start only infrastructure (run app locally for hot reload)
-docker-compose up -d postgres redis minio clamav
+docker-compose up -d postgres redis
 
 # Start with observability stack
 docker-compose --profile observability up -d
@@ -508,11 +472,9 @@ Before deploying to production, verify:
 - [ ] `NODE_ENV=production` is set (enables HTTPS-only cookies, strict CSP, removes Swagger UI and Bull Board)
 - [ ] PostgreSQL is not publicly accessible (firewall rules or VPC)
 - [ ] Redis is password-protected (`requirepass` in `redis.conf`)
-- [ ] S3 bucket blocks public access except for explicitly public prefixes
 - [ ] `/admin/queues` (Bull Board) is behind IP allowlist or admin-only auth
 - [ ] `/metrics` (Prometheus) is not publicly accessible (network policy or firewall)
 - [ ] `ALERTS_WEBHOOK_URL` is configured so critical job failures page someone
-- [ ] ClamAV signatures are updating automatically (`CLAMAV_NO_FRESHCLAMD=false`)
 - [ ] Rate limiting thresholds are tuned for expected traffic patterns
 - [ ] Grafana admin password is changed from the default
 - [ ] `prisma migrate deploy` (not `migrate dev`) is used in production CI pipelines
