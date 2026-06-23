@@ -1,10 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import {
-  VersioningType,
-  ClassSerializerInterceptor,
-  ValidationPipe,
-  RequestMethod,
-} from '@nestjs/common';
+import { VersioningType, ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -130,10 +125,7 @@ async function bootstrap() {
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
-  // Exclude /metrics from the API prefix — Prometheus expects to scrape at bare /metrics
-  app.setGlobalPrefix('api', {
-    exclude: [{ path: 'metrics', method: RequestMethod.GET }],
-  });
+  app.setGlobalPrefix('api');
   app.enableVersioning({ type: VersioningType.URI, defaultVersion: '1' });
 
   // ── Global Pipes ──────────────────────────────────────────────────────────

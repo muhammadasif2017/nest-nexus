@@ -1,4 +1,4 @@
-# Health Checks + Prometheus Metrics
+# Health Checks
 
 All health endpoints are public (no auth required) and excluded from rate limiting.
 
@@ -103,61 +103,11 @@ done
 
 ---
 
-## Prometheus Metrics
-
-### 5. Scrape metrics endpoint
-
-**GET** `/metrics`  
-Note: No `/api/v1` prefix — Prometheus expects bare `/metrics`.
-
-```bash
-curl -s http://localhost:3000/metrics
-```
-
-**Expect:** Prometheus text format output, e.g.:
-```
-# HELP http_requests_total Total number of HTTP requests
-# TYPE http_requests_total counter
-http_requests_total{method="GET",path="/api/v1/health/live",status="200"} 3
-
-# HELP http_request_duration_seconds HTTP request duration in seconds
-# TYPE http_request_duration_seconds histogram
-http_request_duration_seconds_bucket{le="0.005",...} 10
-```
-
-**Verify specific metrics exist:**
-```bash
-curl -s http://localhost:3000/metrics | grep "http_requests_total"
-curl -s http://localhost:3000/metrics | grep "http_request_duration_seconds"
-curl -s http://localhost:3000/metrics | grep "nodejs_"
-```
-
----
-
-### 6. Metrics increment after requests
-
-```bash
-# Baseline count
-BEFORE=$(curl -s http://localhost:3000/metrics | grep 'http_requests_total{.*"200"' | awk '{print $2}')
-
-# Make some requests
-for i in {1..5}; do
-  curl -s http://localhost:3000/api/v1/health/live > /dev/null
-done
-
-# Check count increased
-AFTER=$(curl -s http://localhost:3000/metrics | grep 'http_requests_total{.*"200"' | awk '{print $2}')
-echo "Before: $BEFORE, After: $AFTER"
-# AFTER should be BEFORE + 5 (or more if other requests arrived)
-```
-
----
-
 ## Dev-Only Endpoints
 
 These only exist when `NODE_ENV !== production`.
 
-### 7. Swagger UI
+### 5. Swagger UI
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/docs
@@ -168,7 +118,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/docs
 
 **Postman alternative:** Swagger UI at `/api/docs` also exposes a **Try it out** button for every REST endpoint — useful if you want to test auth flows without setting up the collection manually.
 
-### 8. Bull Board (queue monitoring)
+### 6. Bull Board (queue monitoring)
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/queues
