@@ -92,8 +92,9 @@ absent from the runtime).
 - Uploaded files are not virus-scanned in production — accepted risk.
   Revisit if the VM is ever resized off the free tier.
 - No Prometheus/Grafana in production — no live metrics dashboard for this
-  deployment. `/metrics` endpoint still exists in the app (unaffected by
-  this ADR) for future use if observability infra is added elsewhere.
+  deployment. (At decision time the app still exposed a `/metrics` endpoint;
+  the metrics feature has since been removed from the project entirely, so
+  there is no `/metrics` endpoint to scrape anywhere now.)
 - Postgres connection now crosses the public internet to Neon's pooler
   endpoint instead of a local socket/container — adds network latency per
   query, acceptable trade-off for zero DB hosting cost.
