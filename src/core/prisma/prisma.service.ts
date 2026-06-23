@@ -1,7 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { prismaQueryInsights } from '@prisma/sqlcommenter-query-insights';
 import { ConfigService } from '@nestjs/config';
 import { Pool } from 'pg';
 
@@ -14,7 +13,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       connectionString: config.get<string>('database.url')!,
       max: config.get<number>('database.poolMax'),
     });
-    super({ adapter: new PrismaPg(pool), comments: [prismaQueryInsights()] });
+    super({ adapter: new PrismaPg(pool) });
     this.pool = pool;
   }
 
