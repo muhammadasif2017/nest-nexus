@@ -634,38 +634,6 @@
       ]
     },
     {
-      "name": "Notifications",
-      "item": [
-        {
-          "name": "Stream (SSE)",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{accessToken}}"
-              },
-              {
-                "key": "Accept",
-                "value": "text/event-stream"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/notifications/stream",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "notifications",
-                "stream"
-              ]
-            },
-            "description": "Long-lived Server-Sent Events connection. Postman supports SSE preview in newer versions; otherwise use curl -N."
-          }
-        }
-      ]
-    },
-    {
       "name": "Health",
       "item": [
         {
