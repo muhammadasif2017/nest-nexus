@@ -1,6 +1,6 @@
 # Nexus
 
-> A deep-dive into backend authentication — six auth mechanisms, each built from the protocol up on a production-grade NestJS stack.
+> What does it take to support six authentication methods in one NestJS backend — OAuth, 2FA, passkeys, magic links, API keys, and sessions? I built them to find out.
 
 Most backends ship one auth flow and call it done. Nexus implements six —
 OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, API keys, and server-side
