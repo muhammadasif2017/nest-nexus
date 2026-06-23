@@ -29,7 +29,11 @@ Thumbs.db
 /coverage
 /.nyc_output
 
-/docs/*
+# Internal-only docs — real infra details / candid positioning / stale, keep private
+/docs/DEPLOY.md
+/docs/decisions/ADR-022-requirements-analysis-methodology.md
+/docs/ONBOARDING.md
+
 CLAUDE.md
 .understand-anything/*
 SPEC.md

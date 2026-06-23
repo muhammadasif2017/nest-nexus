@@ -1,11 +1,21 @@
 # Nexus
 
-> A production-ready NestJS enterprise boilerplate — secure, observable, and built to scale.
+> A deep-dive into backend authentication — six auth mechanisms, each built from the protocol up on a production-grade NestJS stack.
 
-Nexus is an opinionated, fully-annotated backend architecture that collapses months of
-infrastructure decisions into a single starting point. Every pattern was chosen for a
-reason, every security layer has a documented rationale, and every module is designed to
-be extended without being rewritten.
+Most backends ship one auth flow and call it done. Nexus implements six —
+OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, API keys, and server-side
+sessions — alongside a hardened JWT core with refresh-token rotation and
+family-based reuse detection.
+
+The auth lives in a realistic setting: Postgres/Prisma, Redis, BullMQ queues
+with dead-letter handling, S3 storage, and a full Prometheus/Grafana
+observability stack — the infrastructure a real service runs on, so the auth
+flows are tested against production-shaped concerns rather than a toy harness.
+
+This is a reference implementation, not a clone-and-start template — there is
+deliberately no business domain, because the subject *is* authentication. The
+GraphQL layer exists to exercise GraphQL patterns (code-first schema,
+DataLoaders, dual REST/GraphQL guards) — a practice exercise, not a domain requirement.
 
 ---
 
@@ -24,9 +34,9 @@ be extended without being rewritten.
 | **Cache** | Redis (ioredis) | Application cache + BullMQ backbone |
 | **Queues** | BullMQ | Background jobs, retries, dead-letter |
 | **Scheduler** | @nestjs/schedule | Cron jobs with distributed locking |
-| **Storage** | AWS S3 / MinIO | Direct, presigned, and multipart uploads |
-| **Images** | Sharp | Variant generation, EXIF stripping, LQIP |
-| **Scanning** | ClamAV | Async virus scanning with quarantine flow |
+| **Storage** | AWS S3 / MinIO | Direct upload, ownership-scoped delete, presigned GET URLs |
+| **Images** | Sharp | Avatar resize to WebP, magic-byte type validation |
+| **Scanning** | ClamAV | Inline virus scanning of uploads before storage |
 | **Security** | Helmet, CSRF, Throttler | Layered HTTP security hardening |
 | **Observability** | Prometheus + Grafana | Metrics, dashboards, alerting rules |
 | **Health** | Terminus | Kubernetes-ready liveness/readiness probes |
@@ -140,10 +150,6 @@ src/
 │   ├── alerts.config.ts
 │   └── config.validation.ts         # Zod schema — app refuses to start if invalid
 │
-├── prisma/                          # Prisma connection layer
-│   ├── prisma.service.ts            # PrismaClient wrapper (OnModuleInit/Destroy)
-│   └── prisma.module.ts             # @Global() — no per-module import needed
-│
 ├── common/                          # Shared, zero-business-logic primitives
 │   ├── decorators/                  # @CurrentUser(), @Roles(), @Public(), @AllowPending2FA()
 │   ├── enums/                       # Role enum
@@ -151,24 +157,30 @@ src/
 │   ├── guards/                      # JwtAuthGuard, RolesGuard (both context-aware)
 │   └── interceptors/                # LoggingInterceptor, SerializeInterceptor
 │
-├── database/                        # Re-exports PrismaModule for legacy import compatibility
-├── cache/                           # Redis CacheModule + CacheInvalidationService
-├── logger/                          # Pino logger with request redaction
-├── events/                          # EventEmitter2 (wildcard, global)
-├── queues/                          # BullMQ queues, processors, dead-letter, Bull Board
-├── scheduler/                       # Cron jobs with distributed Redis locking
-├── storage/                         # S3 abstraction, Sharp pipeline, ClamAV quarantine
-├── health/                          # Terminus liveness + readiness + deep checks
-├── metrics/                         # Prometheus metrics + HTTP interceptor
-├── graphql/                         # GraphQLModule configuration
+├── core/                            # Infrastructure modules
+│   ├── prisma/                      # PrismaService wrapper, @Global()
+│   ├── cache/                       # Redis CacheModule + CacheInvalidationService
+│   ├── redis/                       # Shared Redis connection
+│   ├── logger/                      # Pino logger with request redaction
+│   ├── events/                      # EventEmitter2 (wildcard, global)
+│   ├── queues/                      # BullMQ email queue, processor, dead-letter
+│   ├── scheduler/                   # Cron jobs with distributed Redis locking
+│   ├── storage/                     # S3/MinIO abstraction, Sharp, ClamAV
+│   ├── mailer/                      # Email sending
+│   ├── health/                      # Terminus liveness + readiness + deep checks
+│   └── metrics/                     # Prometheus metrics + HTTP interceptor
 │
-└── modules/                         # Feature modules (one per domain)
-    ├── auth/                        # JWT, sessions, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links
+├── graphql/                         # GraphQLModule configuration
+├── schema.graphql                   # Generated code-first schema (committed)
+│
+└── modules/                         # Feature modules — auth-focused, no business domain
+    ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
+    ├── session-auth/                # Server-side session login (separate module)
     ├── users/                       # DataLoader, serialization
     └── notifications/               # WebSocket gateway, SSE, fan-out delivery
 
 prisma/
-├── schema.prisma                    # Single source of truth: User, RefreshToken, OauthProvider
+├── schema.prisma                    # Models: User, RefreshToken, OauthProvider, WebauthnCredential, ApiKey
 ├── prisma.config.ts                 # Prisma 7 runtime config (DATABASE_URL, migrations path)
 └── migrations/                      # Auto-generated SQL migrations (committed to version control)
 ```
@@ -190,8 +202,7 @@ The JWT path (stateless Bearer tokens + HttpOnly refresh cookie) serves API clie
 apps, SPAs, third-party integrations — that manage their own session state. The session path
 (server-side sessions in PostgreSQL via `connect-pg-simple`) serves traditional web clients
 where the server holds state. Both paths share the same `AuthService` and converge on the same
-`req.user` object that guards and decorators read from. See ADR-010 for the full rationale
-and OAuth state-management details.
+`req.user` object that guards and decorators read from.
 
 ### Refresh token rotation with reuse detection
 
@@ -205,8 +216,6 @@ Tokens are stored as bcrypt hashes (cost 8) in a dedicated `RefreshToken` table 
 FK to `User`. Cost 8 (vs 12 for passwords) is intentional: cryptographically random tokens
 derive their brute-force resistance from entropy, not work factor — keeping rotation latency
 low while remaining storage-safe against database compromise.
-
-See ADR-002 for the reuse-detection algorithm and ADR-008 for the storage decision.
 
 ### Guards are context-aware
 
@@ -232,8 +241,7 @@ When `UsersService.update()` runs, it emits `user.updated` via EventEmitter2.
 `CacheInvalidationService` listens for that event, deletes the affected cache keys locally,
 and publishes an invalidation message to a Redis Pub/Sub channel. Every other running
 instance receives that message and deletes the same keys from their view of the cache.
-The stale window is near-zero rather than "up to TTL." See ADR-011 for the design
-rationale and alternatives considered.
+The stale window is near-zero rather than "up to TTL."
 
 ### Cron jobs use distributed locking
 
@@ -243,15 +251,19 @@ Every `@Cron()` handler acquires a Redis lock before doing any work. The lock us
 logs and returns immediately. This eliminates duplicate work and phantom concurrency bugs
 in horizontally scaled deployments.
 
-### File uploads follow a three-pattern strategy
+### File uploads are virus-scanned before storage
 
-**Direct** (file < 10MB or needs server-side processing): file bytes flow through
-NestJS → S3. Enables image processing and virus scanning before storage.
-**Presigned** (file 10–100MB): NestJS issues a signed URL, client uploads directly to S3,
-client confirms back to NestJS. Server never touches the file bytes.
-**Multipart** (file > 100MB): NestJS orchestrates part-level presigned URLs, client uploads
-parts in parallel, NestJS completes the assembly. All three patterns write to the same
-`FileRecord` schema with a status lifecycle (PENDING → COMPLETE/FAILED).
+Two endpoints, both JWT-protected. File bytes flow through NestJS → S3 (direct upload):
+
+- **`POST /upload/avatar`** (max 5MB): ClamAV scan → Sharp resize to a 256×256 WebP →
+  upload to `avatars/{userId}/`. Image type is validated by **magic bytes**, not the
+  client-supplied `Content-Type`.
+- **`POST /upload/file`** (max 20MB): ClamAV scan → store as-is under `uploads/{userId}/`.
+- **`DELETE /upload/*`**: ownership-checked — the key must be prefixed with the caller's
+  own `avatars/{userId}/` or `uploads/{userId}/`, else `403`.
+
+The `StorageService` wraps S3 (or MinIO locally) and can also issue presigned GET URLs for
+reads. Files are not tracked in a database table — the S3 key is the record.
 
 ### BullMQ jobs have a two-layer failure strategy
 
@@ -259,8 +271,7 @@ Layer 1 is automatic retry with exponential backoff — handles transient failur
 blips, momentary Redis timeouts). Layer 2 is the dead-letter store — on final failure,
 the job is persisted, classified by error type (transient, permanent, external),
 and an alert is fired for critical queues. Operators can inspect, acknowledge, and replay
-dead-letter jobs without touching the database directly. See ADR-009 for why BullMQ was
-chosen over pg-boss, Agenda, and Bull.
+dead-letter jobs without touching the database directly.
 
 ---
 
@@ -269,7 +280,7 @@ chosen over pg-boss, Agenda, and Bull.
 ### JWT Login
 
 ```
-POST /api/v1/auth/login (REST only — no GraphQL mutation; see ADR-003 boundary)
+POST /api/v1/auth/login (REST only — no GraphQL mutation)
   → AuthService validates credentials (timing-safe bcrypt)
   → TokenService issues access token (15m) + refresh token (7d)
   → Access token → response body (store in memory, not localStorage)
@@ -300,26 +311,16 @@ GET /api/v1/auth/google/callback → Passport verifies, OAuthService upserts Oau
 GitHub and Microsoft follow the same pattern: /auth/github(/callback), /auth/microsoft(/callback)
 ```
 
-### Account Linking
-
-```
-GET /api/v1/auth/google/link     → requires JWT (authenticated user)
-                                 → embeds userId in OAuth state parameter
-GET /api/v1/auth/google/callback → detects state → links provider to existing account
-                                 → safety checks: provider not already linked,
-                                   not claimed by another account
-```
-
 ### TOTP Two-Factor
 
 ```
-POST → initiateTwoFactor()       → returns QR code URI + raw secret
-POST → confirmTwoFactor(code)    → verifies first code → enables 2FA → returns backup codes
+POST /api/v1/auth/2fa/setup    → returns QR code URI + raw secret (secret stored encrypted)
+POST /api/v1/auth/2fa/enable   → verifies first code → enables 2FA → returns backup codes
+POST /api/v1/auth/2fa/disable  → verifies a code → disables 2FA
 
 On login (2FA enabled):
-  → Password valid → issue 2FA pending token (scope: 'two_factor_pending', 5m TTL)
-  → POST verifyTwoFactor(pendingToken, totpCode)
-  → Code valid → issue full auth tokens
+  → Password valid → issue 2FA pending token (scope: 'two_factor_pending')
+  → POST /api/v1/auth/2fa/verify → code valid → issue full auth tokens
 ```
 
 ---
@@ -333,29 +334,23 @@ Client                              Server
   │                                    │
   ├─ connect({ auth: { token } }) ────→│ handleConnection()
   │                                    │   verify JWT manually
-  │                                    │   join room 'user:{userId}'
-  │←── connection:established ─────────│   deliver unread notifications
+  │                                    │   join private room 'user:{userId}'
   │                                    │
-  │←── notification:new ───────────────│ @OnEvent('notification.created')
-  │                                    │   server.to('user:{id}').emit(...)
-  │                                    │   Redis adapter fans out to all instances
+  │←── notification ───────────────────│ server.to('user:{id}').emit(...)
+  │                                    │   Redis adapter fans out across instances
   │
-  ├─ notification:mark_read ──────────→│ @SubscribeMessage()
-  │←── notification:updated ───────────│   marks read, acknowledges sender
+  ├─ ping ────────────────────────────→│ @SubscribeMessage('ping')
+  ├─ join:room ───────────────────────→│ @SubscribeMessage('join:room')
+  │←── room:joined ────────────────────│   own user room only (authorization check)
 ```
 
-### SSE (unidirectional, reconnect-safe)
+### SSE (unidirectional)
 
 ```
-GET /api/v1/notifications/stream
-  → Creates per-user RxJS Subject
-  → Returns Observable<MessageEvent> (NestJS keeps connection open)
-  → Each event carries id: (notification UUID)
-
-On reconnect (browser sends Last-Event-ID header automatically):
-  → findMissedNotifications(userId, lastEventId)
-  → PostgreSQL: WHERE id > lastEventId ORDER BY createdAt ASC
-  → Replays missed events → resumes live stream
+GET /api/v1/notifications/stream  (@Sse)
+  → Creates a per-user RxJS Subject
+  → Returns Observable<MessageEvent> (NestJS keeps the connection open)
+  → Pushes events as they occur; cleans up the Subject on client disconnect
 ```
 
 ---
@@ -365,50 +360,40 @@ On reconnect (browser sends Last-Event-ID header automatically):
 ### Job lifecycle
 
 ```
-Producer.enqueue()
-  → Rate limit check (per-user Redis counter)
-  → Priority assignment (1=CRITICAL, 5=HIGH, 10=NORMAL, 50=LOW)
-  → BullMQ.add(jobName, data, options)
+producer.add(jobName, data)
+  → BullMQ.add with default options (attempts: 3, exponential backoff from 2s,
+    removeOnComplete: keep last 100)
 
 Worker.process()
-  → Exponential backoff retry (attempts: 3, delay: 2s/4s/8s)
-  → On success: removeOnComplete (keep last 1000, max 24h)
-  → On final failure:
-      → DeadLetterService.handleFailedJob()
-          → Classify error (transient / permanent / external)
-          → Persist to dead-letter store
-          → Webhook alert for critical queues
+  → Exponential backoff retry on failure
+  → On final failure (attemptsMade >= maxAttempts):
+      → DeadLetterService.handleFailedJob() — persists the failed job for inspection
 ```
 
 ### Queues
 
+One queue is implemented: `email` (concurrency 5), handling welcome, password-reset,
+email-verification, 2FA-code, and magic-link messages. Virus scanning and avatar
+processing run **synchronously** in the upload request, not via queues.
+
 | Queue | Concurrency | Purpose |
 |---|---|---|
-| `email` | 5 | Welcome, magic link, digest emails |
-| `image-processing` | 2 | Sharp variant generation, metadata extraction |
-| `virus-scan` | 3 | ClamAV scanning, quarantine/release |
-| `notifications` | 5 | Fan-out to WebSocket + SSE |
-| `cleanup` | 10 | Orphaned S3 objects, expired tokens |
+| `email` | 5 | Welcome, password reset, email verification, 2FA code, magic link |
 
 ---
 
-## Image Processing Pipeline
+## Image Processing
 
-Every image upload produces four variants in a single Sharp pipeline pass (one decode, multiple outputs):
+`ImageService` (Sharp) handles avatar uploads:
 
-| Variant | Dimensions | Fit | Format | Quality |
-|---|---|---|---|---|
-| `thumbnail` | 150×150 | cover (square crop) | WebP | 80 |
-| `medium` | 800×600 | inside (aspect preserved) | WebP | 82 |
-| `large` | 1920×1080 | inside | WebP | 85 |
-| `original` | unchanged | — | WebP | 90 |
+- **Magic-byte validation** — the file's real type is read from its leading bytes,
+  not trusted from the client `Content-Type` (JPEG/PNG/GIF/WebP allowed).
+- **Avatar resize** — 256×256, `fit: cover`, re-encoded to WebP (quality 80).
+- A generic `resize(width, height)` helper (aspect-preserved WebP) is also available
+  for other callers.
 
-EXIF data (GPS coordinates, device serial numbers, timestamps) is stripped from all
-variants regardless of the `withMetadata` setting — privacy by default.
-
-A base64 LQIP (Low Quality Image Placeholder, 20×20px blurred WebP) is generated and
-stored alongside variant URLs. Frontends can inline this as the initial `src` for
-progressive loading before the full image arrives.
+Sharp re-encodes to WebP, which drops the original EXIF in the process. Multi-variant
+generation and LQIP placeholders are not implemented.
 
 ---
 
@@ -425,23 +410,21 @@ progressive loading before the full image arrives.
 
 ### Key metrics
 
-| Metric | Type | Alert threshold |
+Two custom application metrics, plus the default Node.js/process metrics that
+`prom-client` collects automatically:
+
+| Metric | Type | Captures |
 |---|---|---|
-| `http_requests_total` | Counter | Error rate > 5% for 2m |
-| `http_request_duration_seconds` | Histogram | P95 > 1s for 5m |
-| `bullmq_queue_depth{state="waiting"}` | Gauge | > 500 for 5m |
-| `auth_events_total{outcome="failure"}` | Counter | > 10/min (brute force) |
-| `cache_operations_total` | Counter | Hit ratio < 80% |
-| `websocket_connections_active` | Gauge | Sudden drop |
+| `http_requests_total` | Counter | Request count by method / route / status |
+| `http_request_duration_seconds` | Histogram | Per-request latency (for P50/P99) |
+| `nodejs_*`, `process_*` | (default) | Heap, event-loop lag, CPU, memory (prom-client defaults) |
 
-### Grafana dashboards
+### Grafana dashboard
 
-Pre-provisioned dashboards load automatically at startup (no manual import required):
+One dashboard is pre-provisioned (loads at startup, no manual import):
 
-- **API Overview** — request rate, error rate, P95/P99 latency by route
-- **Queue Health** — depth, throughput, failure rate per queue
-- **Infrastructure** — Redis memory, PostgreSQL query rate and connection pool, disk usage
-- **Security** — auth event rate, failed login spikes, rate limit triggers
+- **HTTP** — request rate, error rate (4xx/5xx), latency P50/P99, error-rate %
+- **Node.js Runtime** — memory, CPU usage
 
 ---
 
@@ -513,7 +496,13 @@ docker build --target production -t nexus:latest .
 
 ---
 
-## Extending the Boilerplate
+## Extending the Project
+
+Nexus isn't a template to clone — but the extension points are documented here
+because building each seam cleanly was part of the exercise, and because a
+reader (or future me) should be able to see how a new module, queue, or OAuth
+provider slots in. The feature-module steps below use a hypothetical `orders`
+module purely to illustrate the pattern; no business domain actually exists.
 
 ### Adding a new feature module
 
