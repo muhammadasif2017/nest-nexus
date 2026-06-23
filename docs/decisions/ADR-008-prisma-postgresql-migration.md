@@ -3,6 +3,12 @@
 ## Status
 Accepted
 
+> **Note (2026-06-23):** The Query Insights integration
+> (`@prisma/sqlcommenter-query-insights`) referenced throughout this ADR has since
+> been removed from the codebase. The PostgreSQL/Prisma migration decision still
+> stands on its other merits (type safety, relational data model, migration
+> tooling) — only the Query Insights layer was dropped.
+
 ## Date
 2026-06-15
 

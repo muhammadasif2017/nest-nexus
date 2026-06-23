@@ -24,7 +24,6 @@ API surface is REST, documented with OpenAPI/Swagger.
 |---|---|---|
 | **Framework** | NestJS 11 | Module system, DI container, decorators |
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
-| **Query Insights** | @prisma/sqlcommenter | SQL comment annotations for Cloud SQL Query Insights |
 | **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
 | **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
