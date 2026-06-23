@@ -1,7 +1,8 @@
 # ADR-004: Code-First GraphQL Schema Generation
 
 ## Status
-Accepted
+Superseded (2026-06-23) — GraphQL was removed from the project. This ADR is
+retained for history.
 
 ## Date
 2026-06-15

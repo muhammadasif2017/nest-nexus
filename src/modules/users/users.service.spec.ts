@@ -38,12 +38,6 @@ const makeP2025 = () =>
     clientVersion: '7.0.0',
   });
 
-// ── DataLoader mock ───────────────────────────────────────────────────────────
-
-const makeLoaderMock = () => ({
-  batchUsers: { load: jest.fn() },
-});
-
 // ── Factory ───────────────────────────────────────────────────────────────────
 
 const makeEventEmitterMock = () => ({ emit: jest.fn() });
@@ -55,16 +49,14 @@ const makeCacheMock = () => ({
 
 const makeService = () => {
   const prisma = makePrismaMock();
-  const loader = makeLoaderMock();
   const eventEmitter = makeEventEmitterMock();
   const cache = makeCacheMock();
   const service = new UsersService(
     prisma as unknown as PrismaService,
-    loader as any,
     eventEmitter as unknown as EventEmitter2,
     cache as any,
   );
-  return { service, prisma, loader, eventEmitter, cache };
+  return { service, prisma, eventEmitter, cache };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,60 +153,62 @@ describe('UsersService', () => {
   // ── findById ─────────────────────────────────────────────────────────────────
 
   describe('findById()', () => {
-    it('loads user via DataLoader', async () => {
-      const { service, loader } = makeService();
-      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+    it('loads the user by id via prisma', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeRawUser());
       await service.findById('user-id-1');
-      expect(loader.batchUsers.load).toHaveBeenCalledWith('user-id-1');
+      expect(prisma.user.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'user-id-1' } }),
+      );
     });
 
     it('returns UserOutput when user found', async () => {
-      const { service, loader } = makeService();
-      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeRawUser());
       const result = await service.findById('user-id-1');
       expect(result.email).toBe('user@test.com');
       expect(result.id).toBe('user-id-1');
     });
 
-    it('throws NotFoundException when loader returns null', async () => {
-      const { service, loader } = makeService();
-      loader.batchUsers.load.mockResolvedValue(null);
+    it('throws NotFoundException when prisma returns null', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       await expect(service.findById('missing-id')).rejects.toThrow(NotFoundException);
     });
 
     it('includes the id in the NotFoundException message', async () => {
-      const { service, loader } = makeService();
-      loader.batchUsers.load.mockResolvedValue(null);
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
       await expect(service.findById('missing-id')).rejects.toThrow('missing-id');
     });
 
     it('strips password from returned UserOutput', async () => {
-      const { service, loader } = makeService();
-      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeRawUser());
       const result = await service.findById('user-id-1');
       expect((result as any).password).toBeUndefined();
     });
 
-    it('returns cached value without hitting DataLoader on cache hit', async () => {
-      const { service, loader, cache } = makeService();
+    it('returns cached value without hitting the DB on cache hit', async () => {
+      const { service, prisma, cache } = makeService();
       const cachedUser = makeRawUser();
       cache.get.mockResolvedValue(cachedUser);
       const result = await service.findById('user-id-1');
       expect(result).toBe(cachedUser);
-      expect(loader.batchUsers.load).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
     });
 
-    it('populates cache after DataLoader call on cache miss', async () => {
-      const { service, loader, cache } = makeService();
+    it('populates cache after DB query on cache miss', async () => {
+      const { service, prisma, cache } = makeService();
       cache.get.mockResolvedValue(undefined);
-      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      prisma.user.findUnique.mockResolvedValue(makeRawUser());
       await service.findById('user-id-1');
       expect(cache.set).toHaveBeenCalledWith('users:id:user-id-1', expect.any(Object));
     });
 
     it('reads cache with key "users:id:<id>"', async () => {
-      const { service, loader, cache } = makeService();
-      loader.batchUsers.load.mockResolvedValue(makeRawUser());
+      const { service, prisma, cache } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeRawUser());
       await service.findById('user-id-1');
       expect(cache.get).toHaveBeenCalledWith('users:id:user-id-1');
     });

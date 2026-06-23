@@ -1,16 +1,30 @@
 {
   "info": {
     "name": "nest-nexus API",
-    "description": "REST + GraphQL endpoints for the nest-nexus NestJS boilerplate. JWT auth, session auth, OAuth, 2FA, magic links, uploads, health, metrics.\n\nSet `baseUrl` (REST, e.g. http://localhost:3000/api/v1), `graphqlUrl` (e.g. http://localhost:3000/graphql) and `metricsUrl` (e.g. http://localhost:3000/metrics) collection variables before running.\n\nLogin requests auto-capture `accessToken` into a collection variable via a test script — protected requests use {{accessToken}} as a Bearer token.",
+    "description": "REST endpoints for the nest-nexus NestJS boilerplate. JWT auth, session auth, OAuth, 2FA, magic links, uploads, health, metrics.\n\nSet `baseUrl` (REST, e.g. http://localhost:3000/api/v1) and `metricsUrl` (e.g. http://localhost:3000/metrics) collection variables before running.\n\nLogin requests auto-capture `accessToken` into a collection variable via a test script — protected requests use {{accessToken}} as a Bearer token.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "baseUrl", "value": "http://localhost:3000/api/v1" },
-    { "key": "graphqlUrl", "value": "http://localhost:3000/graphql" },
-    { "key": "metricsUrl", "value": "http://localhost:3000/metrics" },
-    { "key": "accessToken", "value": "" },
-    { "key": "deviceId", "value": "" },
-    { "key": "userId", "value": "" }
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api/v1"
+    },
+    {
+      "key": "metricsUrl",
+      "value": "http://localhost:3000/metrics"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "deviceId",
+      "value": ""
+    },
+    {
+      "key": "userId",
+      "value": ""
+    }
   ],
   "item": [
     {
@@ -20,12 +34,26 @@
           "name": "Register",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"test.user@example.com\",\n  \"displayName\": \"Test User\",\n  \"password\": \"Str0ng!Passw0rd\"\n}"
             },
-            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            }
           }
         },
         {
@@ -46,12 +74,26 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"test.user@example.com\",\n  \"password\": \"Str0ng!Passw0rd\"\n}"
             },
-            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            }
           }
         },
         {
@@ -59,8 +101,20 @@
           "request": {
             "method": "POST",
             "header": [],
-            "body": { "mode": "raw", "raw": "" },
-            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] },
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh"
+              ]
+            },
             "description": "Relies on the HttpOnly refresh_token cookie set during login. Enable Postman's cookie jar for this domain."
           }
         },
@@ -68,35 +122,88 @@
           "name": "Logout",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
           }
         },
         {
           "name": "Me",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
           }
         },
         {
           "name": "List device sessions",
           "request": {
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/auth/sessions", "host": ["{{baseUrl}}"], "path": ["auth", "sessions"] }
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/sessions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "sessions"
+              ]
+            }
           }
         },
         {
           "name": "Revoke device session",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/auth/sessions/{{deviceId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "sessions", "{{deviceId}}"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "sessions",
+                "{{deviceId}}"
+              ]
             }
           }
         }
@@ -109,7 +216,16 @@
           "name": "Google — start flow (browser only)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/auth/google", "host": ["{{baseUrl}}"], "path": ["auth", "google"] },
+            "url": {
+              "raw": "{{baseUrl}}/auth/google",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "google"
+              ]
+            },
             "description": "Redirects to Google. Cannot be exercised meaningfully from Postman — open in a browser."
           }
         },
@@ -117,7 +233,17 @@
           "name": "Google — callback (browser only)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/auth/google/callback", "host": ["{{baseUrl}}"], "path": ["auth", "google", "callback"] },
+            "url": {
+              "raw": "{{baseUrl}}/auth/google/callback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "google",
+                "callback"
+              ]
+            },
             "description": "Hit by Google's redirect, not called directly. Issues JWT + HttpOnly cookie, redirects to client origin with token in URL fragment."
           }
         },
@@ -125,14 +251,33 @@
           "name": "GitHub — start flow (browser only)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/auth/github", "host": ["{{baseUrl}}"], "path": ["auth", "github"] }
+            "url": {
+              "raw": "{{baseUrl}}/auth/github",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "github"
+              ]
+            }
           }
         },
         {
           "name": "GitHub — callback (browser only)",
           "request": {
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/auth/github/callback", "host": ["{{baseUrl}}"], "path": ["auth", "github", "callback"] }
+            "url": {
+              "raw": "{{baseUrl}}/auth/github/callback",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "github",
+                "callback"
+              ]
+            }
           }
         }
       ]
@@ -144,8 +289,23 @@
           "name": "Setup",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-            "url": { "raw": "{{baseUrl}}/auth/2fa/setup", "host": ["{{baseUrl}}"], "path": ["auth", "2fa", "setup"] },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/setup",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "setup"
+              ]
+            },
             "description": "Returns { secret, otpauthUrl, qrCodeDataUrl }. Scan otpauthUrl/qrCodeDataUrl with an authenticator app, then call Enable with the resulting code."
           }
         },
@@ -154,11 +314,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/2fa/enable", "host": ["{{baseUrl}}"], "path": ["auth", "2fa", "enable"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "enable"
+              ]
+            },
             "description": "Returns 10 single-use backup codes — save them, shown only once."
           }
         },
@@ -167,11 +346,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/2fa/disable", "host": ["{{baseUrl}}"], "path": ["auth", "2fa", "disable"] }
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "disable"
+              ]
+            }
           }
         },
         {
@@ -179,11 +377,30 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"code\": \"123456\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/2fa/verify", "host": ["{{baseUrl}}"], "path": ["auth", "2fa", "verify"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/2fa/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "2fa",
+                "verify"
+              ]
+            },
             "description": "Authorization header must carry the short-lived two_factor_pending token returned by Login, not a normal access token."
           }
         }
@@ -196,9 +413,27 @@
           "name": "Send",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"test.user@example.com\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/magic-link/send", "host": ["{{baseUrl}}"], "path": ["auth", "magic-link", "send"] },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.user@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/magic-link/send",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "magic-link",
+                "send"
+              ]
+            },
             "description": "Always returns 200 regardless of whether the email exists. Check the worker/email log (SMTP stubbed) for the link in dev."
           }
         },
@@ -221,9 +456,20 @@
             "method": "GET",
             "url": {
               "raw": "{{baseUrl}}/auth/magic-link/verify?token=PASTE_TOKEN_HERE",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "magic-link", "verify"],
-              "query": [{ "key": "token", "value": "PASTE_TOKEN_HERE" }]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "magic-link",
+                "verify"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "PASTE_TOKEN_HERE"
+                }
+              ]
             }
           }
         }
@@ -237,11 +483,31 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "X-CSRF-Token", "value": "{{csrfToken}}", "description": "Double-submit cookie pattern — read the XSRF-TOKEN cookie value and mirror it here." }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}",
+                "description": "Double-submit cookie pattern — read the XSRF-TOKEN cookie value and mirror it here."
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"test.user@example.com\",\n  \"password\": \"Str0ng!Passw0rd\"\n}" },
-            "url": { "raw": "{{baseUrl}}/auth/session/login", "host": ["{{baseUrl}}"], "path": ["auth", "session", "login"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test.user@example.com\",\n  \"password\": \"Str0ng!Passw0rd\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/session/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "session",
+                "login"
+              ]
+            },
             "description": "Sets HttpOnly session cookie. Returns 401 with errorCode TWO_FACTOR_REQUIRED if 2FA is enabled — use the JWT flow instead for those accounts."
           }
         },
@@ -250,9 +516,22 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "X-CSRF-Token", "value": "{{csrfToken}}" }
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrfToken}}"
+              }
             ],
-            "url": { "raw": "{{baseUrl}}/auth/session/logout", "host": ["{{baseUrl}}"], "path": ["auth", "session", "logout"] },
+            "url": {
+              "raw": "{{baseUrl}}/auth/session/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "session",
+                "logout"
+              ]
+            },
             "description": "Requires an active session cookie (SessionGuard) — not @Public()."
           }
         }
@@ -265,12 +544,32 @@
           "name": "Upload avatar",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
-              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/upload/avatar", "host": ["{{baseUrl}}"], "path": ["upload", "avatar"] },
+            "url": {
+              "raw": "{{baseUrl}}/upload/avatar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "upload",
+                "avatar"
+              ]
+            },
             "description": "Scanned via ClamAV, resized to 256x256 WebP, uploaded to S3."
           }
         },
@@ -278,12 +577,32 @@
           "name": "Upload file",
           "request": {
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "body": {
               "mode": "formdata",
-              "formdata": [{ "key": "file", "type": "file", "src": [] }]
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             },
-            "url": { "raw": "{{baseUrl}}/upload/file", "host": ["{{baseUrl}}"], "path": ["upload", "file"] },
+            "url": {
+              "raw": "{{baseUrl}}/upload/file",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "upload",
+                "file"
+              ]
+            },
             "description": "Max 20MB, stored as-is after virus scan."
           }
         },
@@ -291,11 +610,23 @@
           "name": "Delete uploaded file",
           "request": {
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/upload/avatars/{{userId}}/PASTE_FILENAME.webp",
-              "host": ["{{baseUrl}}"],
-              "path": ["upload", "avatars", "{{userId}}", "PASTE_FILENAME.webp"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "upload",
+                "avatars",
+                "{{userId}}",
+                "PASTE_FILENAME.webp"
+              ]
             },
             "description": "Key must be prefixed with avatars/{userId}/ or uploads/{userId}/ to pass the ownership check."
           }
@@ -310,10 +641,25 @@
           "request": {
             "method": "GET",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
-              { "key": "Accept", "value": "text/event-stream" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Accept",
+                "value": "text/event-stream"
+              }
             ],
-            "url": { "raw": "{{baseUrl}}/notifications/stream", "host": ["{{baseUrl}}"], "path": ["notifications", "stream"] },
+            "url": {
+              "raw": "{{baseUrl}}/notifications/stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "stream"
+              ]
+            },
             "description": "Long-lived Server-Sent Events connection. Postman supports SSE preview in newer versions; otherwise use curl -N."
           }
         }
@@ -324,15 +670,51 @@
       "item": [
         {
           "name": "Liveness",
-          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/live", "host": ["{{baseUrl}}"], "path": ["health", "live"] } }
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            }
+          }
         },
         {
           "name": "Readiness",
-          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health", "ready"] } }
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            }
+          }
         },
         {
           "name": "Deep",
-          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/deep", "host": ["{{baseUrl}}"], "path": ["health", "deep"] } }
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/health/deep",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health",
+                "deep"
+              ]
+            }
+          }
         }
       ]
     },
@@ -350,168 +732,82 @@
       ]
     },
     {
-      "name": "GraphQL",
+      "name": "Users",
       "item": [
         {
-          "name": "register",
+          "name": "me (own profile)",
           "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "mutation Register($input: RegisterInput!) {\n  register(input: $input) {\n    accessToken\n    accessTokenExpiresAt\n    user { id email displayName roles }\n  }\n}",
-                "variables": "{\n  \"input\": {\n    \"email\": \"gql.user@example.com\",\n    \"displayName\": \"GQL User\",\n    \"password\": \"Str0ng!Passw0rd\"\n  }\n}"
-              }
-            },
-            "url": "{{graphqlUrl}}"
-          }
-        },
-        {
-          "name": "login",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "const body = pm.response.json();",
-                  "const token = body && body.data && body.data.login && body.data.login.accessToken;",
-                  "if (token) pm.collectionVariables.set('accessToken', token);"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "mutation Login($input: LoginInput!) {\n  login(input: $input) {\n    accessToken\n    accessTokenExpiresAt\n    isTwoFactorPending\n    user { id email displayName roles }\n  }\n}",
-                "variables": "{\n  \"input\": {\n    \"email\": \"gql.user@example.com\",\n    \"password\": \"Str0ng!Passw0rd\"\n  }\n}"
-              }
-            },
-            "url": "{{graphqlUrl}}"
-          }
-        },
-        {
-          "name": "refreshTokens",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "mutation {\n  refreshTokens {\n    accessToken\n    accessTokenExpiresAt\n  }\n}",
-                "variables": ""
-              }
-            },
-            "url": "{{graphqlUrl}}",
-            "description": "Relies on the HttpOnly refresh_token cookie — enable Postman's cookie jar."
-          }
-        },
-        {
-          "name": "logout",
-          "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
-            "body": {
-              "mode": "graphql",
-              "graphql": { "query": "mutation {\n  logout\n}", "variables": "" }
-            },
-            "url": "{{graphqlUrl}}"
+            "url": "{{baseUrl}}/users/me"
           }
         },
         {
-          "name": "me",
+          "name": "user (by id)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "query {\n  me {\n    id\n    email\n    displayName\n    roles\n    isEmailVerified\n    isActive\n    avatarUrl\n    createdAt\n  }\n}",
-                "variables": ""
-              }
-            },
-            "url": "{{graphqlUrl}}"
-          }
-        },
-        {
-          "name": "user (by id, public)",
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "query User($id: ID!) {\n  user(id: $id) {\n    id\n    displayName\n    avatarUrl\n  }\n}",
-                "variables": "{\n  \"id\": \"{{userId}}\"\n}"
-              }
-            },
-            "url": "{{graphqlUrl}}"
+            "url": "{{baseUrl}}/users/{{userId}}",
+            "description": "Authenticated — requires a valid JWT."
           }
         },
         {
           "name": "users (admin only)",
           "request": {
-            "method": "POST",
+            "method": "GET",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "query {\n  users {\n    id\n    email\n    displayName\n    roles\n    isActive\n  }\n}",
-                "variables": ""
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
               }
-            },
-            "url": "{{graphqlUrl}}",
+            ],
+            "url": "{{baseUrl}}/users",
             "description": "Requires ADMIN or SUPER_ADMIN role."
           }
         },
         {
           "name": "updateProfile",
           "request": {
-            "method": "POST",
+            "method": "PATCH",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
             ],
             "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "mutation UpdateProfile($input: UpdateUserInput!) {\n  updateProfile(input: $input) {\n    id\n    displayName\n    avatarUrl\n    updatedAt\n  }\n}",
-                "variables": "{\n  \"input\": {\n    \"displayName\": \"Updated Name\"\n  }\n}"
-              }
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Updated Name\"\n}"
             },
-            "url": "{{graphqlUrl}}"
+            "url": "{{baseUrl}}/users/me"
           }
         },
         {
           "name": "deactivateUser (admin only)",
           "request": {
-            "method": "POST",
+            "method": "DELETE",
             "header": [
-              { "key": "Content-Type", "value": "application/json" },
-              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
-            ],
-            "body": {
-              "mode": "graphql",
-              "graphql": {
-                "query": "mutation DeactivateUser($id: ID!) {\n  deactivateUser(id: $id) {\n    id\n    isActive\n  }\n}",
-                "variables": "{\n  \"id\": \"{{userId}}\"\n}"
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
               }
-            },
-            "url": "{{graphqlUrl}}",
-            "description": "Requires ADMIN or SUPER_ADMIN role. Emits user.deactivated — JwtStrategy/SessionGuard caches invalidate within ~30s, see ADR-013."
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}",
+            "description": "Requires ADMIN or SUPER_ADMIN role. Soft delete (sets isActive=false). Emits user.deactivated — JwtStrategy/SessionGuard caches invalidate within ~30s, see ADR-013."
           }
         }
       ]

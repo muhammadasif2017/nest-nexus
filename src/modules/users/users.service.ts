@@ -5,15 +5,26 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { PrismaService } from '../../core/prisma/prisma.service';
-import { UserLoader } from './loaders/user.loader';
 import { UpdateUserInput } from './dto/update-user.input';
 import { UserOutput } from './dto/user.output';
+
+const USER_SELECT = {
+  id: true,
+  email: true,
+  displayName: true,
+  roles: true,
+  isEmailVerified: true,
+  isActive: true,
+  avatarUrl: true,
+  lastLoginAt: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
 
 @Injectable()
 export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly userLoader: UserLoader,
     private readonly eventEmitter: EventEmitter2,
     @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
@@ -24,18 +35,7 @@ export class UsersService {
 
     const users = await this.prisma.user.findMany({
       where: { isActive: true },
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        roles: true,
-        isEmailVerified: true,
-        isActive: true,
-        avatarUrl: true,
-        lastLoginAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+      select: USER_SELECT,
     });
     const result = this.toOutput(users);
     await this.cache.set('users:all', result);
@@ -47,7 +47,10 @@ export class UsersService {
     const cached = await this.cache.get<UserOutput>(key);
     if (cached) return cached;
 
-    const user = await this.userLoader.batchUsers.load(id);
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: USER_SELECT,
+    });
     if (!user) throw new NotFoundException(`User with id ${id} not found.`);
     const result = this.toOutput(user);
     await this.cache.set(key, result);

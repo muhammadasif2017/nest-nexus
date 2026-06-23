@@ -10,7 +10,7 @@ JWT + session decision)
 ## Context
 ADR-010 established JWT and session auth as parallel flows, both implemented inside
 `AuthModule`/`AuthController`. In practice this meant one controller carried two
-unrelated auth mechanisms: JWT (Bearer token, stateless, used by GraphQL/most REST)
+unrelated auth mechanisms: JWT (Bearer token, stateless, used by most REST)
 and session (HttpOnly cookie, server-side state, `req.session`-based). Guards,
 middleware (CSRF), and serialization differed per mechanism but lived side by side
 in the same files.

@@ -9,7 +9,7 @@ import { ClassConstructor, plainToInstance } from 'class-transformer';
 import { Observable, map } from 'rxjs';
 
 // A factory interceptor: @Serialize(UserOutput) wraps any controller method
-// or resolver and transforms the return value through class-transformer.
+// and transforms the return value through class-transformer.
 // This is the explicit alternative to the global ClassSerializerInterceptor.
 // Use this when specific routes need a different output shape than the default.
 @Injectable()

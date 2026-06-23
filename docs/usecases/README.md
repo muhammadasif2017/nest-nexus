@@ -9,7 +9,7 @@
 | 3 | Two-Factor Auth — TOTP + backup codes | [03-auth-2fa.md](03-auth-2fa.md) |
 | 4 | Magic Link login | [04-auth-magic-link.md](04-auth-magic-link.md) |
 | 5 | Session-based auth + CSRF | [05-auth-session.md](05-auth-session.md) |
-| 6 | User profile (REST + GraphQL) | [06-users.md](06-users.md) |
+| 6 | User profile (REST) | [06-users.md](06-users.md) |
 | 7 | File & avatar upload | [07-file-upload.md](07-file-upload.md) |
 | 8 | Real-time notifications (SSE) | [08-notifications.md](08-notifications.md) |
 | 9 | Health checks + Prometheus metrics | [09-health-metrics.md](09-health-metrics.md) |

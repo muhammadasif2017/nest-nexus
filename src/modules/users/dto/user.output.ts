@@ -1,58 +1,47 @@
 import { Exclude, Expose } from 'class-transformer';
-import { ObjectType, Field, ID } from '@nestjs/graphql';
 import { ApiProperty } from '@nestjs/swagger';
 
-// @ObjectType() makes this both a GraphQL type AND a serialization target.
-// It's the single source of truth for "what a User looks like to the outside world."
-@ObjectType('User') // The string argument is the GraphQL type name
+// The single source of truth for "what a User looks like to the outside world."
+// SerializeInterceptor (ClassSerializerInterceptor) uses these decorators to
+// strip anything not explicitly @Expose()'d from REST responses.
 @Exclude() // Start by EXCLUDING everything — this is safer than @Expose-ing everything
 export class UserOutput {
-  @Field(() => ID)
   @ApiProperty({ example: 'cuid2-or-uuid-string' })
   @Expose()
   id!: string;
 
-  @Field()
   @ApiProperty({ example: 'user@example.com' })
   @Expose()
   email!: string;
 
-  @Field()
   @ApiProperty({ example: 'John Doe' })
   @Expose()
   displayName!: string;
 
-  @Field(() => [String])
   @ApiProperty({ example: ['user'], type: [String] })
   @Expose()
   roles!: string[];
 
-  @Field()
   @ApiProperty({ example: false })
   @Expose()
   isEmailVerified!: boolean;
 
-  @Field()
   @ApiProperty({ example: true })
   @Expose()
   isActive!: boolean;
 
-  @Field({ nullable: true })
   @ApiProperty({ required: false, nullable: true })
   @Expose()
   avatarUrl?: string;
 
-  @Field({ nullable: true })
   @ApiProperty({ required: false, nullable: true })
   @Expose()
   lastLoginAt?: Date;
 
-  @Field()
   @ApiProperty()
   @Expose()
   createdAt!: Date;
 
-  @Field()
   @ApiProperty()
   @Expose()
   updatedAt!: Date;

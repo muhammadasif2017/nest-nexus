@@ -5,7 +5,7 @@ import { Role } from '../enums/role.enum';
 // and the RolesGuard agree on as the "address" for role metadata.
 export const ROLES_KEY = 'roles';
 
-// @Roles(Role.ADMIN, Role.SUPER_ADMIN) — attach this to any resolver or controller.
+// @Roles(Role.ADMIN, Role.SUPER_ADMIN) — attach this to any controller or route.
 // Under the hood, this just calls SetMetadata, which stores the roles array
 // on the route handler's metadata, where the RolesGuard will later read it.
 export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);

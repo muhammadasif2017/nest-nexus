@@ -62,7 +62,7 @@ async function bootstrap() {
   });
 
   // Sets ~14 security-related HTTP headers in one shot. We relax contentSecurityPolicy
-  // only in dev so the GraphQL Playground can load its inline scripts.
+  // only in dev so the Swagger UI can load its inline scripts.
   app.use(
     helmet({
       contentSecurityPolicy: isDev ? false : undefined,
@@ -104,8 +104,8 @@ async function bootstrap() {
   // ── CSRF Protection ───────────────────────────────────────────────────────
   // Double-submit cookie pattern: server sets XSRF-TOKEN cookie; client JS
   // reads it and sends the value back as X-CSRF-Token header on mutating requests.
-  // JWT Bearer routes and GraphQL are CSRF-immune (browsers can't auto-send
-  // Bearer headers), so we scope CSRF to session-based routes only.
+  // JWT Bearer routes are CSRF-immune (browsers can't auto-send Bearer headers),
+  // so we scope CSRF to session-based routes only.
   const { doubleCsrfProtection } = doubleCsrf({
     getSecret: () => SESSION_SECRET!,
     // Ties the token to the session ID so token fixation is not possible.
@@ -139,7 +139,6 @@ async function bootstrap() {
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
-  // GraphQL lives at /graphql (unversioned by convention)
   // Exclude /metrics from the API prefix — Prometheus expects to scrape at bare /metrics
   app.setGlobalPrefix('api', {
     exclude: [{ path: 'metrics', method: RequestMethod.GET }],
@@ -166,7 +165,7 @@ async function bootstrap() {
   if (isDev) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('nest-nexus API')
-      .setDescription('REST endpoints for nest-nexus. GraphQL lives at /graphql.')
+      .setDescription('REST endpoints for nest-nexus.')
       .setVersion('1.0')
       .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'access-token')
       .addCookieAuth(
@@ -208,7 +207,6 @@ async function bootstrap() {
 
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
-  console.log(`📡 GraphQL Playground at http://localhost:${PORT}/graphql`);
   if (isDev) {
     console.log(`📖 Swagger docs at http://localhost:${PORT}/api/docs`);
     console.log(`🐂 Bull Board at http://localhost:${PORT}/api/queues`);
