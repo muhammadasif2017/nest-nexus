@@ -12,8 +12,6 @@ test
 .vscode
 .idea
 coverage
-grafana
-prometheus
 postman
 tasks
 .understand-anything
