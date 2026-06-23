@@ -26,6 +26,7 @@ import { HealthModule } from './core/health/health.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { SessionAuthModule } from './modules/session-auth/session-auth.module';
+import { DocumentModule } from './modules/document/document.module';
 
 @Module({
   imports: [
@@ -76,6 +77,7 @@ import { SessionAuthModule } from './modules/session-auth/session-auth.module';
     AuthModule,
     SessionAuthModule,
     UsersModule,
+    DocumentModule,
   ],
 
   providers: [
