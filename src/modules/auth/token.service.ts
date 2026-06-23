@@ -100,6 +100,8 @@ export class TokenService {
 
     const newRefreshToken = await this.generateRefreshToken(user.id, {
       existingFamily: payload.family,
+      deviceId: matchedToken.deviceId ?? undefined,
+      userAgent: matchedToken.userAgent ?? undefined,
     });
     const newAccessToken = this.generateAccessToken(user);
 

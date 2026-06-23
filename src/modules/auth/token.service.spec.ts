@@ -374,6 +374,15 @@ describe('TokenService', () => {
       const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
       expect(data.family).toBe('family-1');
     });
+
+    it('preserves deviceId and re-derives deviceName from the original userAgent', async () => {
+      setupHappyPath(ctx);
+      await ctx.service.rotateRefreshToken(RAW_TOKEN);
+      const { data } = ctx.prisma.refreshToken.create.mock.calls[0][0];
+      expect(data.deviceId).toBe('device-id-1');
+      expect(data.userAgent).toBe('Mozilla/5.0 (Windows NT 10.0)');
+      expect(data.deviceName).toBe('Windows Device');
+    });
   });
 
   // ── revokeAllTokens ───────────────────────────────────────────────────────
