@@ -22,7 +22,6 @@ import { QueuesModule } from './core/queues/queues.module';
 import { EventsModule } from './core/events/events.module';
 import { SchedulerModule } from './core/scheduler/scheduler.module';
 import { HealthModule } from './core/health/health.module';
-import { MetricsModule } from './core/metrics/metrics.module';
 
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -74,7 +73,6 @@ import { SessionAuthModule } from './modules/session-auth/session-auth.module';
     EventsModule,
     SchedulerModule,
     HealthModule,
-    MetricsModule,
     AuthModule,
     SessionAuthModule,
     UsersModule,

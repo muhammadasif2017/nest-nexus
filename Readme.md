@@ -8,8 +8,7 @@ sessions — alongside a hardened JWT core with refresh-token rotation and
 family-based reuse detection.
 
 The auth lives in a realistic setting: Postgres/Prisma, Redis, BullMQ queues
-with dead-letter handling and a full Prometheus/Grafana
-observability stack — the infrastructure a real service runs on, so the auth
+with dead-letter handling — the infrastructure a real service runs on, so the auth
 flows are tested against production-shaped concerns rather than a toy harness.
 
 This is a reference implementation, not a clone-and-start template — there is
@@ -32,7 +31,6 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Queues** | BullMQ | Background jobs, retries, dead-letter |
 | **Scheduler** | @nestjs/schedule | Cron jobs with distributed locking |
 | **Security** | Helmet, CSRF, Throttler | Layered HTTP security hardening |
-| **Observability** | Prometheus + Grafana | Metrics, dashboards, alerting rules |
 | **Health** | Terminus | Kubernetes-ready liveness/readiness probes |
 | **Logging** | Pino | Structured JSON logs with redaction |
 | **Containers** | Docker + Compose | Full local stack in one command |
@@ -113,15 +111,6 @@ open http://localhost:3000/api/docs
 open http://localhost:3000/admin/queues
 ```
 
-### Start the observability stack (optional)
-
-```bash
-docker-compose --profile observability up -d
-
-open http://localhost:3001   # Grafana (admin / changeme)
-open http://localhost:9090   # Prometheus
-```
-
 ---
 
 ## Project Structure
@@ -156,8 +145,7 @@ src/
 │   ├── queues/                      # BullMQ email queue, processor, dead-letter
 │   ├── scheduler/                   # Cron jobs with distributed Redis locking
 │   ├── mailer/                      # Email sending
-│   ├── health/                      # Terminus liveness + readiness + deep checks
-│   └── metrics/                     # Prometheus metrics + HTTP interceptor
+│   └── health/                      # Terminus liveness + readiness + deep checks
 │
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
@@ -327,25 +315,6 @@ email-verification, 2FA-code, and magic-link messages.
 | `GET /api/v1/health/live` | Is the process alive and not OOM? | Liveness probe |
 | `GET /api/v1/health/ready` | Are all dependencies reachable? | Readiness probe |
 | `GET /api/v1/health/deep` | Full dependency diagnostics | Manual inspection |
-| `GET /metrics` | Prometheus scrape target | Metrics collection |
-
-### Key metrics
-
-Two custom application metrics, plus the default Node.js/process metrics that
-`prom-client` collects automatically:
-
-| Metric | Type | Captures |
-|---|---|---|
-| `http_requests_total` | Counter | Request count by method / route / status |
-| `http_request_duration_seconds` | Histogram | Per-request latency (for P50/P99) |
-| `nodejs_*`, `process_*` | (default) | Heap, event-loop lag, CPU, memory (prom-client defaults) |
-
-### Grafana dashboard
-
-One dashboard is pre-provisioned (loads at startup, no manual import):
-
-- **HTTP** — request rate, error rate (4xx/5xx), latency P50/P99, error-rate %
-- **Node.js Runtime** — memory, CPU usage
 
 ---
 
@@ -472,10 +441,8 @@ Before deploying to production, verify:
 - [ ] PostgreSQL is not publicly accessible (firewall rules or VPC)
 - [ ] Redis is password-protected (`requirepass` in `redis.conf`)
 - [ ] `/admin/queues` (Bull Board) is behind IP allowlist or admin-only auth
-- [ ] `/metrics` (Prometheus) is not publicly accessible (network policy or firewall)
 - [ ] `ALERTS_WEBHOOK_URL` is configured so critical job failures page someone
 - [ ] Rate limiting thresholds are tuned for expected traffic patterns
-- [ ] Grafana admin password is changed from the default
 - [ ] `prisma migrate deploy` (not `migrate dev`) is used in production CI pipelines
 
 ---
