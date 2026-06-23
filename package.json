@@ -1,7 +1,7 @@
 {
   "name": "nestjs-enterprise-boilerplate",
   "version": "1.0.0",
-  "description": "Production-ready NestJS boilerplate with REST API, WebSockets, BullMQ, and full observability",
+  "description": "Production-ready NestJS boilerplate with REST API, BullMQ, and full observability",
   "scripts": {
     "build": "nest build",
     "start": "node dist/main",

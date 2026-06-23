@@ -26,7 +26,6 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
 | **Query Insights** | @prisma/sqlcommenter | SQL comment annotations for Cloud SQL Query Insights |
 | **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
-| **Real-time** | Socket.io + SSE | WebSocket gateway + server-sent events |
 | **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
 | **Passwordless** | Magic links | Email-based authentication |
@@ -169,8 +168,7 @@ src/
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
     ├── session-auth/                # Server-side session login (separate module)
-    ├── users/                       # REST controller, serialization
-    └── notifications/               # WebSocket gateway, SSE, fan-out delivery
+    └── users/                       # REST controller, serialization
 
 prisma/
 ├── schema.prisma                    # Models: User, RefreshToken, OauthProvider, WebauthnCredential, ApiKey
@@ -213,8 +211,7 @@ low while remaining storage-safe against database compromise.
 ### Guards read the request uniformly
 
 `JwtAuthGuard` and `RolesGuard` resolve `req.user` through a shared helper, so the same
-guard works across every REST controller. WebSocket connections handle authentication
-manually in `handleConnection()` because HTTP guards don't run after the WebSocket upgrade.
+guard works across every REST controller.
 
 ### The exception filter returns one consistent envelope
 
@@ -311,36 +308,6 @@ POST /api/v1/auth/2fa/disable  → verifies a code → disables 2FA
 On login (2FA enabled):
   → Password valid → issue 2FA pending token (scope: 'two_factor_pending')
   → POST /api/v1/auth/2fa/verify → code valid → issue full auth tokens
-```
-
----
-
-## Real-Time Architecture
-
-### WebSocket (bidirectional, persistent)
-
-```
-Client                              Server
-  │                                    │
-  ├─ connect({ auth: { token } }) ────→│ handleConnection()
-  │                                    │   verify JWT manually
-  │                                    │   join private room 'user:{userId}'
-  │                                    │
-  │←── notification ───────────────────│ server.to('user:{id}').emit(...)
-  │                                    │   Redis adapter fans out across instances
-  │
-  ├─ ping ────────────────────────────→│ @SubscribeMessage('ping')
-  ├─ join:room ───────────────────────→│ @SubscribeMessage('join:room')
-  │←── room:joined ────────────────────│   own user room only (authorization check)
-```
-
-### SSE (unidirectional)
-
-```
-GET /api/v1/notifications/stream  (@Sse)
-  → Creates a per-user RxJS Subject
-  → Returns Observable<MessageEvent> (NestJS keeps the connection open)
-  → Pushes events as they occur; cleans up the Subject on client disconnect
 ```
 
 ---
