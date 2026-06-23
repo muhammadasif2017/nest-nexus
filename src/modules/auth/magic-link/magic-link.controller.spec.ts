@@ -33,6 +33,8 @@ const makeRes = () => ({
   cookie: jest.fn(),
 });
 
+const makeReq = () => ({ headers: { 'user-agent': 'test-agent' } });
+
 const makeController = () => {
   const authService = makeAuthServiceMock();
   const tokenService = makeTokenServiceMock();
@@ -64,10 +66,11 @@ describe('MagicLinkController', () => {
     it('sets the refresh cookie and returns auth on success', async () => {
       const { controller, magicLinkService, authService, tokenService } = makeController();
       const dto: MagicLinkVerifyInput = { token: 'raw-token' };
+      const req = makeReq();
       const res = makeRes();
-      const result = await controller.verify(dto, res as any);
+      const result = await controller.verify(dto, req as any, res as any);
       expect(magicLinkService.verify).toHaveBeenCalledWith('raw-token');
-      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1');
+      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1', 'test-agent');
       expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(result).toBe(mockAuthOutput);

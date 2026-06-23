@@ -40,6 +40,7 @@ const makeReq = (overrides: Record<string, unknown> = {}) => ({
     email: 'oauth@test.com',
     displayName: 'OAuth User',
   } as OAuthProfile,
+  headers: { 'user-agent': 'test-agent' },
   ...overrides,
 });
 
@@ -60,7 +61,7 @@ describe('OAuthController', () => {
       const req = makeReq();
       const res = makeRes();
       await controller.googleCallback(req as any, res as any);
-      expect(authService.oauthLogin).toHaveBeenCalledWith(req.user);
+      expect(authService.oauthLogin).toHaveBeenCalledWith(req.user, 'test-agent');
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(config.get).toHaveBeenCalledWith('app.clientOrigin');
       expect(res.redirect).toHaveBeenCalledWith(
@@ -75,7 +76,7 @@ describe('OAuthController', () => {
       const req = makeReq();
       const res = makeRes();
       await controller.githubCallback(req as any, res as any);
-      expect(authService.oauthLogin).toHaveBeenCalledWith(req.user);
+      expect(authService.oauthLogin).toHaveBeenCalledWith(req.user, 'test-agent');
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(res.redirect).toHaveBeenCalledWith(
         'http://localhost:3000/oauth/success#token=access-token',

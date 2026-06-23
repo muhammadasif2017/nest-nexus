@@ -21,6 +21,7 @@ const makeRes = () => ({
 
 const makeReq = (overrides: Record<string, unknown> = {}) => ({
   ip: '1.2.3.4',
+  headers: { 'user-agent': 'test-agent' },
   session: {
     regenerate: jest.fn((cb: (err?: Error) => void) => cb()),
     destroy: jest.fn((cb: (err?: Error) => void) => cb()),

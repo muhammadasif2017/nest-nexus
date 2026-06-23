@@ -46,7 +46,10 @@ export class AuthService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  async register(dto: RegisterInput): Promise<{ auth: AuthOutput; refreshToken: string }> {
+  async register(
+    dto: RegisterInput,
+    userAgent?: string,
+  ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const exists = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
       select: { id: true },
@@ -66,12 +69,13 @@ export class AuthService {
     });
 
     this.eventEmitter.emit('user.created', { userId: newUser.id });
-    return this.buildAuthResponse(newUser);
+    return this.buildAuthResponse(newUser, userAgent);
   }
 
   async login(
     dto: LoginInput,
     ipAddress?: string,
+    userAgent?: string,
   ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email.toLowerCase() },
@@ -98,12 +102,15 @@ export class AuthService {
     // 2FA is enabled — issue a short-lived pending token instead of a full session
     if (user.isTwoFactorEnabled) return this.buildPendingTwoFactorResponse(user);
 
-    return this.buildAuthResponse(user);
+    return this.buildAuthResponse(user, userAgent);
   }
 
   // Issues a full token pair for a user whose identity has already been verified
   // (post-2FA check, magic link, or OAuth callback). Not a replacement for login().
-  async issueTokens(userId: string): Promise<{ auth: AuthOutput; refreshToken: string }> {
+  async issueTokens(
+    userId: string,
+    userAgent?: string,
+  ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -121,10 +128,13 @@ export class AuthService {
       },
     });
     if (!user || !user.isActive) throw new NotFoundException('User not found or inactive.');
-    return this.buildAuthResponse(user);
+    return this.buildAuthResponse(user, userAgent);
   }
 
-  async oauthLogin(profile: OAuthProfile): Promise<{ auth: AuthOutput; refreshToken: string }> {
+  async oauthLogin(
+    profile: OAuthProfile,
+    userAgent?: string,
+  ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     // Try finding an existing OAuth link first
     let user: UserForAuth | null = null;
 
@@ -235,7 +245,7 @@ export class AuthService {
 
     if (user.isTwoFactorEnabled) return this.buildPendingTwoFactorResponse(user);
 
-    return this.buildAuthResponse(user);
+    return this.buildAuthResponse(user, userAgent);
   }
 
   async logout(userId: string): Promise<void> {
@@ -271,9 +281,10 @@ export class AuthService {
 
   private async buildAuthResponse(
     user: UserForAuth,
+    userAgent?: string,
   ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const accessToken = this.tokenService.generateAccessToken(user);
-    const refreshToken = await this.tokenService.generateRefreshToken(user.id);
+    const refreshToken = await this.tokenService.generateRefreshToken(user.id, { userAgent });
 
     const expiresIn = this.config.get<string>('jwt.expiresIn') ?? '15m';
     const accessTokenExpiresAt = parseExpiryDate(expiresIn, 15 * 60 * 1000);

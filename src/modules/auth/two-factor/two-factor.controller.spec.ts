@@ -37,6 +37,8 @@ const makeRes = () => ({
   cookie: jest.fn(),
 });
 
+const makeReq = () => ({ headers: { 'user-agent': 'test-agent' } });
+
 const makeController = () => {
   const authService = makeAuthServiceMock();
   const tokenService = makeTokenServiceMock();
@@ -65,22 +67,24 @@ describe('TwoFactorController', () => {
       const { controller, twoFactorService } = makeController();
       twoFactorService.verify.mockResolvedValue(false);
       const res = makeRes();
-      await expect(controller.verify(user, dto, res as any)).rejects.toThrow(UnauthorizedException);
+      await expect(controller.verify(user, dto, makeReq() as any, res as any)).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('does not issue tokens when the code is invalid', async () => {
       const { controller, twoFactorService, authService } = makeController();
       twoFactorService.verify.mockResolvedValue(false);
       const res = makeRes();
-      await expect(controller.verify(user, dto, res as any)).rejects.toThrow();
+      await expect(controller.verify(user, dto, makeReq() as any, res as any)).rejects.toThrow();
       expect(authService.issueTokens).not.toHaveBeenCalled();
     });
 
     it('issues a full token pair and sets the refresh cookie on success', async () => {
       const { controller, authService, tokenService } = makeController();
       const res = makeRes();
-      const result = await controller.verify(user, dto, res as any);
-      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1');
+      const result = await controller.verify(user, dto, makeReq() as any, res as any);
+      expect(authService.issueTokens).toHaveBeenCalledWith('user-id-1', 'test-agent');
       expect(tokenService.getRefreshTokenCookieOptions).toHaveBeenCalled();
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(result).toBe(mockAuthOutput);

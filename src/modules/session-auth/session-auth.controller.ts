@@ -63,7 +63,7 @@ export class SessionAuthController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { auth } = await this.authService.login(dto, req.ip);
+    const { auth } = await this.authService.login(dto, req.ip, req.headers['user-agent']);
 
     if ((auth as any).isTwoFactorPending) {
       return res.status(HttpStatus.UNAUTHORIZED).json({

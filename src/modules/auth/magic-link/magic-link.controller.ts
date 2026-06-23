@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Body, Query, Res, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Req, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiQuery } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
 import { MagicLinkService } from './magic-link.service';
@@ -46,10 +46,14 @@ export class MagicLinkController {
   @ApiResponse({ status: 401, description: 'Invalid or expired token.' })
   async verify(
     @Query() dto: MagicLinkVerifyInput,
+    @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthOutput> {
     const userId = await this.magicLinkService.verify(dto.token);
-    const { auth, refreshToken } = await this.authService.issueTokens(userId);
+    const { auth, refreshToken } = await this.authService.issueTokens(
+      userId,
+      req.headers['user-agent'],
+    );
     res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     return auth;
   }
