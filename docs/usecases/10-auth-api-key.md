@@ -29,7 +29,6 @@ directly — the middleware factory reuses the exact same `ApiKeyService.validat
 | Route | Why it's a candidate |
 |---|---|
 | `/metrics` (Prometheus scrape) | No auth today — gate to the scrape client only |
-| `/upload/avatar`, `/upload/file` | JWT-only today; could allow a backend service to upload on a user's behalf |
 | `/health/deep` | Exposes internal dependency status; lower priority — `/live` and `/ready` must stay public for orchestrators |
 
 ---

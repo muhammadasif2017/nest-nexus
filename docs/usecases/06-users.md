@@ -70,7 +70,7 @@ curl -s -X PATCH $BASE/api/v1/users/me \
 
 **Verify:**
 - Cache key `users:id:<id>` invalidated (next `GET /users/:id` fetches fresh data)
-- `user.updated` event emitted (check SSE stream if connected — see [08-notifications.md](08-notifications.md))
+- `user.updated` event emitted (drives cache invalidation — see [ADR-011](../decisions/ADR-011-event-driven-cache-invalidation.md))
 
 **Note:** `updateProfile` always targets the current user (from JWT `sub`) — it
 cannot target another user.
@@ -121,7 +121,7 @@ curl -s -X POST $BASE/api/v1/auth/login \
 curl -s $BASE/api/v1/auth/me -H "Authorization: Bearer $DEACTIVATED_USER_TOKEN" | jq
 # Expect 401 (after in-process cache expires or is invalidated by event)
 ```
-- `user.deactivated` event fires → SSE clients notified
+- `user.deactivated` event fires → `JwtStrategy`/`SessionGuard` invalidate their in-process active-status caches
 
 ---
 

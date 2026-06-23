@@ -10,8 +10,6 @@
 | 4 | Magic Link login | [04-auth-magic-link.md](04-auth-magic-link.md) |
 | 5 | Session-based auth + CSRF | [05-auth-session.md](05-auth-session.md) |
 | 6 | User profile (REST) | [06-users.md](06-users.md) |
-| 7 | File & avatar upload | [07-file-upload.md](07-file-upload.md) |
-| 8 | Real-time notifications (SSE) | [08-notifications.md](08-notifications.md) |
 | 9 | Health checks + Prometheus metrics | [09-health-metrics.md](09-health-metrics.md) |
 | 10 | API key auth (M2M) | [10-auth-api-key.md](10-auth-api-key.md) |
 | 11 | Passkey / WebAuthn login | [11-auth-webauthn.md](11-auth-webauthn.md) |
