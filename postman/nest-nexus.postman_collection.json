@@ -777,6 +777,38 @@
             "url": "{{baseUrl}}/users/{{userId}}",
             "description": "Requires ADMIN or SUPER_ADMIN role. Soft delete (sets isActive=false). Emits user.deactivated — JwtStrategy/SessionGuard caches invalidate within ~30s, see ADR-013."
           }
+        },
+        {
+          "name": "setRoles (super admin only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\"moderator\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{userId}}/roles",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{userId}}",
+                "roles"
+              ]
+            },
+            "description": "Requires SUPER_ADMIN role. Replaces the user's roles wholesale. Valid values: user, moderator, admin, super_admin. Blocks demoting the last super_admin (409 ConflictException). Roles read from DB per request — change applies to live tokens within ~30s, no refresh. See ADR-029."
+          }
         }
       ]
     }
