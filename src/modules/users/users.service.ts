@@ -1,10 +1,11 @@
-import { Injectable, NotFoundException, Inject } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Inject } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { PrismaService } from '../../core/prisma/prisma.service';
+import { Role } from '../../common/enums/role.enum';
 import { UpdateUserInput } from './dto/update-user.input';
 import { UserOutput } from './dto/user.output';
 
@@ -65,6 +66,36 @@ export class UsersService {
   async update(id: string, dto: UpdateUserInput): Promise<UserOutput> {
     const updated = await this.prisma.user
       .update({ where: { id }, data: dto })
+      .catch((e) => this.rethrowNotFound(e, id));
+    this.eventEmitter.emit('user.updated', { userId: id });
+    return this.toOutput(updated);
+  }
+
+  // Replaces a user's role set wholesale. The route is super_admin-gated; this
+  // method adds the one invariant a guard cannot express: the system must never
+  // be left with zero super_admins. Demoting the last one would lock everyone
+  // out of role management permanently (no route can re-grant super_admin).
+  // NOTE: roles are carried in the JWT, so an already-issued token keeps its old
+  // roles until it expires/refreshes — this writes the DB source of truth only.
+  async setRoles(id: string, roles: Role[]): Promise<UserOutput> {
+    if (!roles.includes(Role.SUPER_ADMIN)) {
+      const target = await this.prisma.user.findUnique({
+        where: { id },
+        select: { roles: true },
+      });
+      if (!target) throw new NotFoundException(`User with id ${id} not found.`);
+      if (target.roles.includes(Role.SUPER_ADMIN)) {
+        const superAdmins = await this.prisma.user.count({
+          where: { roles: { has: Role.SUPER_ADMIN } },
+        });
+        if (superAdmins <= 1) {
+          throw new ConflictException('Cannot remove the last super_admin.');
+        }
+      }
+    }
+
+    const updated = await this.prisma.user
+      .update({ where: { id }, data: { roles } })
       .catch((e) => this.rethrowNotFound(e, id));
     this.eventEmitter.emit('user.updated', { userId: id });
     return this.toOutput(updated);
