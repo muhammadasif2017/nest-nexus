@@ -1,5 +1,6 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { createTestApp, resetDb } from './helpers/test-app';
 import { PrismaService } from '../src/core/prisma/prisma.service';
 
@@ -87,7 +88,13 @@ describe('Users (e2e)', () => {
   it('GET /users and DELETE /users/:id succeed once the caller has the admin role', async () => {
     await prisma.user.update({ where: { id: userId }, data: { roles: ['user', 'admin'] } });
 
-    // Roles are embedded in the JWT at login time — re-login to pick up the change.
+    // JwtStrategy sources roles from the DB but caches them per-user for 30s.
+    // setRoles() emits user.updated to clear that cache; this direct DB write
+    // bypasses the service, so emit the same event to invalidate the stale entry.
+    app.get(EventEmitter2).emit('user.updated', { userId });
+
+    // The existing access token already works — roles come from the DB, not the
+    // token — but re-login to confirm a fresh token carries the new roles too.
     const loginRes = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({ email: credentials.email, password: credentials.password })
