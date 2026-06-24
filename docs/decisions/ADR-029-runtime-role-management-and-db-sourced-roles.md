@@ -92,5 +92,9 @@ problem reduces to the deactivation-staleness problem ADR-013 already solved.
   `CacheInvalidationService` to broadcast `user.updated` over the existing Pub/Sub channel.
 - `setRoles()` performs the last-super_admin count only when the new role set drops
   `super_admin` — the common promote/keep cases skip the extra read.
+- The check-and-write runs in a **Serializable** transaction. Without it, two concurrent
+  demotions of different `super_admin`s could each observe count > 1 and both commit,
+  leaving zero — the exact lockout the invariant exists to prevent. Serializable isolation
+  makes the read+write a single conflict-detected unit.
 - The first `super_admin` must still come from outside the request path (seed / DB); the
   endpoint manages every role change after that.

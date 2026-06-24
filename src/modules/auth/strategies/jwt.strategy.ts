@@ -43,7 +43,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     const cached = this.activeCache.get(payload.sub);
     if (cached && cached.exp > now) {
       if (!cached.ok) throw new UnauthorizedException('User account is inactive or not found.');
-      return { ...payload, roles: cached.roles };
+      // Copy: the cached array is shared across requests — never hand out the reference.
+      return { ...payload, roles: [...cached.roles] };
     }
 
     const user = await this.prisma.user.findUnique({

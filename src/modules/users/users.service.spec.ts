@@ -24,14 +24,19 @@ const makeRawUser = (overrides: Record<string, unknown> = {}) => ({
 
 // ── Prisma mock builder ───────────────────────────────────────────────────────
 
-const makePrismaMock = () => ({
-  user: {
-    findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue(null),
-    update: jest.fn().mockResolvedValue(makeRawUser()),
-    count: jest.fn().mockResolvedValue(0),
-  },
-});
+const makePrismaMock = () => {
+  const mock: any = {
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue(makeRawUser()),
+      count: jest.fn().mockResolvedValue(0),
+    },
+  };
+  // Interactive transaction: run the callback with the same mock as the tx client.
+  mock.$transaction = jest.fn((cb: (tx: typeof mock) => unknown) => cb(mock));
+  return mock;
+};
 
 const makeP2025 = () =>
   new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
@@ -374,6 +379,17 @@ describe('UsersService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
       await expect(service.setRoles('missing-id', ['admin'] as any)).rejects.toThrow(
         NotFoundException,
+      );
+    });
+
+    it('runs the check and write in a Serializable transaction', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['user'] });
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['moderator'] }));
+      await service.setRoles('user-id-1', ['moderator'] as any);
+      expect(prisma.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ isolationLevel: 'Serializable' }),
       );
     });
   });

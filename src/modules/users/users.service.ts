@@ -79,24 +79,32 @@ export class UsersService {
   // change then applies to already-issued tokens (JwtStrategy reads roles from
   // the DB, not the token) within the 30s cache window.
   async setRoles(id: string, roles: Role[]): Promise<UserOutput> {
-    if (!roles.includes(Role.SUPER_ADMIN)) {
-      const target = await this.prisma.user.findUnique({
-        where: { id },
-        select: { roles: true },
-      });
-      if (!target) throw new NotFoundException(`User with id ${id} not found.`);
-      if (target.roles.includes(Role.SUPER_ADMIN)) {
-        const superAdmins = await this.prisma.user.count({
-          where: { roles: { has: Role.SUPER_ADMIN } },
-        });
-        if (superAdmins <= 1) {
-          throw new ConflictException('Cannot remove the last super_admin.');
-        }
-      }
-    }
-
-    const updated = await this.prisma.user
-      .update({ where: { id }, data: { roles } })
+    // The check (is this the last super_admin?) and the write must be atomic, or
+    // two concurrent demotions of different super_admins could each see count > 1
+    // and both proceed — leaving zero. Serializable isolation makes the read+write
+    // a single conflict-detected unit.
+    const updated = await this.prisma
+      .$transaction(
+        async (tx) => {
+          if (!roles.includes(Role.SUPER_ADMIN)) {
+            const target = await tx.user.findUnique({
+              where: { id },
+              select: { roles: true },
+            });
+            if (!target) throw new NotFoundException(`User with id ${id} not found.`);
+            if (target.roles.includes(Role.SUPER_ADMIN)) {
+              const superAdmins = await tx.user.count({
+                where: { roles: { has: Role.SUPER_ADMIN } },
+              });
+              if (superAdmins <= 1) {
+                throw new ConflictException('Cannot remove the last super_admin.');
+              }
+            }
+          }
+          return tx.user.update({ where: { id }, data: { roles } });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
       .catch((e) => this.rethrowNotFound(e, id));
     this.eventEmitter.emit('user.updated', { userId: id });
     return this.toOutput(updated);
