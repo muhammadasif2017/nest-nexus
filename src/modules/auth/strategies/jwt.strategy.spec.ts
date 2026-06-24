@@ -36,19 +36,27 @@ describe('JwtStrategy', () => {
   describe('validate()', () => {
     it('returns payload when user is active', async () => {
       const { strategy, prisma } = makeStrategy();
-      prisma.user.findUnique.mockResolvedValue({ isActive: true });
+      prisma.user.findUnique.mockResolvedValue({ isActive: true, roles: ['user'] });
       const payload = makePayload();
       const result = await strategy.validate(payload);
-      expect(result).toBe(payload);
+      expect(result).toEqual({ ...payload, roles: ['user'] });
     });
 
-    it('queries prisma by payload.sub, selecting isActive only', async () => {
+    it('overrides token roles with the DB roles (source of truth)', async () => {
       const { strategy, prisma } = makeStrategy();
-      prisma.user.findUnique.mockResolvedValue({ isActive: true });
+      prisma.user.findUnique.mockResolvedValue({ isActive: true, roles: ['admin'] });
+      // Token still carries the old ['user'] roles; DB says admin now.
+      const result = await strategy.validate(makePayload({ roles: ['user'] }));
+      expect(result.roles).toEqual(['admin']);
+    });
+
+    it('queries prisma by payload.sub, selecting isActive and roles', async () => {
+      const { strategy, prisma } = makeStrategy();
+      prisma.user.findUnique.mockResolvedValue({ isActive: true, roles: ['user'] });
       await strategy.validate(makePayload({ sub: 'distinct-id' }));
       expect(prisma.user.findUnique).toHaveBeenCalledWith({
         where: { id: 'distinct-id' },
-        select: { isActive: true },
+        select: { isActive: true, roles: true },
       });
     });
 

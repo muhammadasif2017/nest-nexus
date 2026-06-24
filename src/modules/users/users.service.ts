@@ -75,8 +75,9 @@ export class UsersService {
   // method adds the one invariant a guard cannot express: the system must never
   // be left with zero super_admins. Demoting the last one would lock everyone
   // out of role management permanently (no route can re-grant super_admin).
-  // NOTE: roles are carried in the JWT, so an already-issued token keeps its old
-  // roles until it expires/refreshes — this writes the DB source of truth only.
+  // Emits user.updated so JwtStrategy drops its cached roles for this user; the
+  // change then applies to already-issued tokens (JwtStrategy reads roles from
+  // the DB, not the token) within the 30s cache window.
   async setRoles(id: string, roles: Role[]): Promise<UserOutput> {
     if (!roles.includes(Role.SUPER_ADMIN)) {
       const target = await this.prisma.user.findUnique({
