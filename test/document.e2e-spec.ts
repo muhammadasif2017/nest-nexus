@@ -70,15 +70,17 @@ describe('Document authorization (e2e)', () => {
       .expect(200);
   });
 
-  it('stranger gets 403 reading a private document (no relation, ABAC denies)', async () => {
+  // No-enumeration: a denied read is reported as 404, identical to a missing
+  // resource, so a stranger cannot probe which ids exist. See ADR-028.
+  it('stranger gets 404 reading a private document (denied read hidden as missing)', async () => {
     const { body } = await createDoc(ownerToken);
     await request(app.getHttpServer())
       .get(`/api/v1/documents/${body.id}`)
       .set(auth(strangerToken))
-      .expect(403);
+      .expect(404);
   });
 
-  it('ABAC: stranger can preview a public document but not a private one', async () => {
+  it('ABAC: stranger can preview a public document but a private one is 404', async () => {
     const pub = await createDoc(ownerToken, 'public');
     const priv = await createDoc(ownerToken, 'private');
 
@@ -87,10 +89,11 @@ describe('Document authorization (e2e)', () => {
       .set(auth(strangerToken))
       .expect(200);
 
+    // Denied ABAC read → 404, not 403 (no-enumeration). See ADR-028.
     await request(app.getHttpServer())
       .get(`/api/v1/documents/${priv.body.id}/preview`)
       .set(auth(strangerToken))
-      .expect(403);
+      .expect(404);
   });
 
   it('list returns only documents the caller may read', async () => {
