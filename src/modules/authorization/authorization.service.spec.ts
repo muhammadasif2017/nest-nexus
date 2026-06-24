@@ -14,10 +14,13 @@ const doc = (overrides: Partial<DocumentResource> = {}): DocumentResource => ({
 
 describe('AuthorizationService', () => {
   let authz: AuthorizationService;
-  let relation: { check: jest.Mock };
+  let relation: { check: jest.Mock; satisfyingObjectIds: jest.Mock };
 
   beforeEach(() => {
-    relation = { check: jest.fn().mockResolvedValue(false) };
+    relation = {
+      check: jest.fn().mockResolvedValue(false),
+      satisfyingObjectIds: jest.fn().mockResolvedValue(new Set<string>()),
+    };
     authz = new AuthorizationService(relation as unknown as RelationService);
   });
 
@@ -156,6 +159,48 @@ describe('AuthorizationService', () => {
         ).toBe(true);
         expect(relation.check).toHaveBeenCalledWith('stranger', Relation.OWNER, 'document', 'd1');
       });
+    });
+  });
+
+  describe('filterReadableDocuments() — bulk read filter', () => {
+    const docs = [
+      doc({ id: 'a', visibility: 'public' }),
+      doc({ id: 'b', visibility: 'private' }),
+      doc({ id: 'c', visibility: 'private' }),
+    ];
+
+    it('returns [] for a null user', async () => {
+      expect(await authz.filterReadableDocuments(null, docs)).toEqual([]);
+      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+    });
+
+    it('returns [] when the role lacks the read scope', async () => {
+      expect(await authz.filterReadableDocuments(subject(['ghost']), docs)).toEqual([]);
+    });
+
+    it('returns the whole page for super_admin without a relation query', async () => {
+      const result = await authz.filterReadableDocuments(subject([Role.SUPER_ADMIN]), docs);
+      expect(result).toEqual(docs);
+      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+    });
+
+    it('returns the whole page for a read:any holder without a relation query', async () => {
+      const result = await authz.filterReadableDocuments(subject([Role.MODERATOR]), docs);
+      expect(result).toEqual(docs);
+      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+    });
+
+    it('keeps public (ABAC) + viewer-relation (ReBAC) rows, drops the rest', async () => {
+      // 'b' granted via a viewer tuple; 'c' has neither attribute nor relation.
+      relation.satisfyingObjectIds.mockResolvedValue(new Set(['b']));
+      const result = await authz.filterReadableDocuments(subject([Role.USER], 'stranger'), docs);
+      expect(result.map((d) => d.id)).toEqual(['a', 'b']);
+      expect(relation.satisfyingObjectIds).toHaveBeenCalledWith(
+        'stranger',
+        Relation.VIEWER,
+        'document',
+        ['a', 'b', 'c'],
+      );
     });
   });
 });

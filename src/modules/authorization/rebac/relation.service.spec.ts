@@ -10,6 +10,7 @@ describe('RelationService', () => {
       upsert: jest.Mock;
       deleteMany: jest.Mock;
       findFirst: jest.Mock;
+      findMany: jest.Mock;
     };
   };
   let emitter: { emit: jest.Mock };

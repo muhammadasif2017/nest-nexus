@@ -71,4 +71,27 @@ export class AuthorizationService {
         return false;
     }
   }
+
+  // Bulk read filter for a page of documents — same read decision as can()
+  // (read:any scope | ABAC visibility | ReBAC viewer) but resolved in O(1)
+  // queries instead of one relation check per row. Returns the readable subset.
+  async filterReadableDocuments<T extends DocumentResource>(
+    user: AuthSubject | undefined | null,
+    docs: T[],
+  ): Promise<T[]> {
+    if (!user || !this.hasPermission(user, Permission.DOCUMENT_READ)) return [];
+    // super_admin and read:any holders may read everything in the page.
+    if (this.isSuperAdmin(user) || this.hasPermission(user, Permission.DOCUMENT_READ_ANY)) {
+      return docs;
+    }
+    const viewable = await this.relation.satisfyingObjectIds(
+      user.sub,
+      Relation.VIEWER,
+      DOCUMENT,
+      docs.map((d) => d.id),
+    );
+    return docs.filter(
+      (d) => evaluatePolicy('document.read', { user, resource: d }) || viewable.has(d.id),
+    );
+  }
 }

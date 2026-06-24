@@ -69,20 +69,47 @@ export class RelationService {
     objectType: string,
     objectId: string,
   ): Promise<boolean> {
-    const grantors = (Object.keys(RELATION_IMPLIES) as Relation[]).filter((r) =>
-      RELATION_IMPLIES[r].includes(required),
-    );
     const tuple = await this.prisma.relationTuple.findFirst({
       where: {
         subjectType: SUBJECT_TYPE,
         subjectId,
         objectType,
         objectId,
-        relation: { in: grantors },
+        relation: { in: this.grantorsOf(required) },
       },
       select: { id: true },
     });
     return !!tuple;
+  }
+
+  // Bulk variant of check() for a page of objects: returns the set of objectIds
+  // (within `objectIds`) on which the subject holds `required` or stronger. One
+  // query instead of one per object — avoids an N+1 in list filtering.
+  async satisfyingObjectIds(
+    subjectId: string,
+    required: Relation,
+    objectType: string,
+    objectIds: string[],
+  ): Promise<Set<string>> {
+    if (objectIds.length === 0) return new Set();
+    const tuples = await this.prisma.relationTuple.findMany({
+      where: {
+        subjectType: SUBJECT_TYPE,
+        subjectId,
+        objectType,
+        objectId: { in: objectIds },
+        relation: { in: this.grantorsOf(required) },
+      },
+      select: { objectId: true },
+    });
+    return new Set(tuples.map((t) => t.objectId));
+  }
+
+  // Relations that satisfy `required` via the implication map.
+  private grantorsOf(required: Relation): Relation[] {
+    return (Object.keys(RELATION_IMPLIES) as Relation[]).filter((r) =>
+      RELATION_IMPLIES[r].includes(required),
+    );
   }
 
   private emitChanged(subjectId: string, objectType: string, objectId: string): void {

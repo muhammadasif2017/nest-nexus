@@ -41,10 +41,10 @@ export class PolicyGuard implements CanActivate {
       where: { id },
       select: { ownerId: true, visibility: true },
     });
-    if (!document) throw new NotFoundException('Document not found.');
-
-    if (!evaluatePolicy(name, { user, resource: document })) {
-      throw new ForbiddenException('Policy denied.');
+    // No-enumeration: a denied attribute-read is reported as 404, identical to a
+    // missing resource, so a caller cannot probe which ids exist. See ADR-028.
+    if (!document || !evaluatePolicy(name, { user, resource: document })) {
+      throw new NotFoundException('Document not found.');
     }
     return true;
   }

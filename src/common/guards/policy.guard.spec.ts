@@ -58,10 +58,10 @@ describe('PolicyGuard', () => {
     ).toBe(true);
   });
 
-  it('throws Forbidden when the policy denies (private, non-owner)', async () => {
+  it('throws NotFound when the policy denies (private, non-owner) — no enumeration', async () => {
     prisma.document.findUnique.mockResolvedValue({ ownerId: 'owner', visibility: 'private' });
     await expect(
       build('document.read').canActivate(httpContext({ sub: 'u2', roles: ['user'] }, 'd1')),
-    ).rejects.toThrow(ForbiddenException);
+    ).rejects.toThrow(NotFoundException);
   });
 });

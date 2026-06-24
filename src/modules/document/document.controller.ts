@@ -6,6 +6,7 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   HttpCode,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { DocumentOutput } from './dto/document.output';
 import { CreateDocumentInput } from './dto/create-document.input';
 import { UpdateDocumentInput } from './dto/update-document.input';
 import { ShareDocumentDto } from './dto/share-document.dto';
+import { PaginationQuery } from './dto/pagination.query';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { PolicyGuard } from '../../common/guards/policy.guard';
 import { RelationGuard } from '../../common/guards/relation.guard';
@@ -54,8 +56,11 @@ export class DocumentController {
   @RequirePermission(Permission.DOCUMENT_READ)
   @ApiOperation({ summary: 'List readable documents (scope + per-row authz filter)' })
   @ApiResponse({ status: 200, type: [DocumentOutput] })
-  findAll(@CurrentUser() user: JwtPayload): Promise<DocumentOutput[]> {
-    return this.documents.findAll(user);
+  findAll(
+    @CurrentUser() user: JwtPayload,
+    @Query() query: PaginationQuery,
+  ): Promise<DocumentOutput[]> {
+    return this.documents.findAll(user, query);
   }
 
   // Composed read decision (read:any | ABAC visibility | ReBAC viewer) in can().
@@ -83,8 +88,12 @@ export class DocumentController {
   @RequireRelation(Relation.EDITOR)
   @ApiOperation({ summary: 'Update a document (scope + ReBAC editor relation)' })
   @ApiResponse({ status: 200, type: DocumentOutput })
-  update(@Param('id') id: string, @Body() input: UpdateDocumentInput): Promise<DocumentOutput> {
-    return this.documents.update(id, input);
+  update(
+    @CurrentUser() user: JwtPayload,
+    @Param('id') id: string,
+    @Body() input: UpdateDocumentInput,
+  ): Promise<DocumentOutput> {
+    return this.documents.update(user, id, input);
   }
 
   // ReBAC demo: requires owner relation + delete scope.
