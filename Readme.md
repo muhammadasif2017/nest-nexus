@@ -25,6 +25,7 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
 | **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
 | **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
+| **Authorization** | RBAC · Scopes · ABAC · ReBAC | Four techniques behind one decision point |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
 | **Passwordless** | Magic links | Email-based authentication |
 | **Cache** | Redis (ioredis) | Application cache + BullMQ backbone |
@@ -130,10 +131,11 @@ src/
 │   └── config.validation.ts         # Zod schema — app refuses to start if invalid
 │
 ├── common/                          # Shared, zero-business-logic primitives
-│   ├── decorators/                  # @CurrentUser(), @Roles(), @Public(), @AllowPending2FA()
-│   ├── enums/                       # Role enum
+│   ├── decorators/                  # @CurrentUser(), @Roles(), @Public(), @AllowPending2FA(),
+│   │                                #   @RequirePermission(), @Policy(), @RequireRelation()
+│   ├── enums/                       # Role + Permission enums
 │   ├── filters/                     # GlobalExceptionFilter (consistent REST envelope)
-│   ├── guards/                      # JwtAuthGuard, RolesGuard
+│   ├── guards/                      # JwtAuthGuard, RolesGuard, PermissionsGuard, PolicyGuard, RelationGuard
 │   └── interceptors/                # LoggingInterceptor, SerializeInterceptor
 │
 ├── core/                            # Infrastructure modules
@@ -150,10 +152,12 @@ src/
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
     ├── session-auth/                # Server-side session login (separate module)
+    ├── authorization/              # RBAC/Scopes, ABAC policies, ReBAC tuples — one decision point
+    ├── document/                   # Demo resource exercising all four authz techniques
     └── users/                       # REST controller, serialization
 
 prisma/
-├── schema.prisma                    # Models: User, RefreshToken, OauthProvider, WebauthnCredential, ApiKey
+├── schema.prisma                    # Models: User, RefreshToken, OauthProvider, WebauthnCredential, ApiKey, Document, RelationTuple
 ├── prisma.config.ts                 # Prisma 7 runtime config (DATABASE_URL, migrations path)
 └── migrations/                      # Auto-generated SQL migrations (committed to version control)
 ```
@@ -176,6 +180,18 @@ apps, SPAs, third-party integrations — that manage their own session state. Th
 (server-side sessions in PostgreSQL via `connect-pg-simple`) serves traditional web clients
 where the server holds state. Both paths share the same `AuthService` and converge on the same
 `req.user` object that guards and decorators read from.
+
+### Authorization is four techniques behind one decision point
+
+Authentication answers *who you are*; authorization answers *what you may do*. The
+`document` resource demos four models side by side: **RBAC→Scopes** (roles expand to
+permission strings), **ABAC** (named policy predicates over resource attributes), and
+**ReBAC** (per-subject/per-object relationship tuples, Zanzibar-lite). Each is a guard
+that no-ops unless its decorator is on the route, so stacked decorators read as logical
+AND. Object-level decisions a stacked guard can't express (read = `read:any` OR public
+visibility OR a `viewer` relation) live in `AuthorizationService.can()`. Denied reads
+return `404`, not `403`, so a caller can't enumerate which ids exist. See ADR-023 through
+ADR-029.
 
 ### Refresh token rotation with reuse detection
 
