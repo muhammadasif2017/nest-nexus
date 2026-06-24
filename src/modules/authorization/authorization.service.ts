@@ -57,6 +57,10 @@ export class AuthorizationService {
         if (evaluatePolicy('document.read', { user, resource })) return true;
         return this.relation.check(user.sub, Relation.VIEWER, DOCUMENT, resource.id);
 
+      // NOTE: write/delete here are NOT hit by the document routes — those gate
+      // mutations via @RequireRelation at the route (a scope AND relation, which a
+      // stacked guard expresses). These branches are kept for completeness of the
+      // decision table and for non-HTTP callers (jobs/CLI) that bypass the guards.
       case Permission.DOCUMENT_WRITE:
         if (!this.hasPermission(user, Permission.DOCUMENT_WRITE)) return false;
         if (resource.ownerId === user.sub) return true;
