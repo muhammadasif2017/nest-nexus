@@ -52,4 +52,6 @@ between coarse RBAC (roles) and fine-grained Scopes (ADR-024).
 - `RolesGuard` (coarse, "is admin") and `PermissionsGuard` (fine, "has document:write")
   coexist; routes pick whichever expresses intent.
 - A role change takes effect on the user's next token issuance (login/refresh), matching
-  existing JWT semantics.
+  existing JWT semantics. **Revised by ADR-029**: `JwtStrategy` now sources `roles` from the
+  DB per request, so a role change applies to already-issued tokens within ~30s. (Permissions
+  are still resolved from roles per request and were never embedded — that reasoning stands.)
