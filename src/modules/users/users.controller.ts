@@ -12,6 +12,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nes
 import { UsersService } from './users.service';
 import { UserOutput } from './dto/user.output';
 import { UpdateUserInput } from './dto/update-user.input';
+import { SetRolesInput } from './dto/set-roles.input';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -79,6 +80,23 @@ export class UsersController {
     @Body() input: UpdateUserInput,
   ): Promise<UserOutput> {
     return this.usersService.update(user.sub, input);
+  }
+
+  // ── Super admin: Replace a user's roles ───────────────────────────────────
+  // super_admin-only: role assignment is the highest-privilege mutation. Roles
+  // are deliberately NOT on UpdateUserInput, so this is the only write path —
+  // a user can never escalate their own roles via PATCH /users/me.
+  @Patch(':id/roles')
+  @Roles(Role.SUPER_ADMIN)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({ summary: 'Replace a user’s roles (super admin only)' })
+  @ApiBody({ type: SetRolesInput })
+  @ApiResponse({ status: 200, description: 'Roles updated.', type: UserOutput })
+  @ApiResponse({ status: 403, description: 'Requires super_admin role.' })
+  @ApiResponse({ status: 404, description: 'User not found.' })
+  @ApiResponse({ status: 409, description: 'Cannot remove the last super_admin.' })
+  async setRoles(@Param('id') id: string, @Body() input: SetRolesInput): Promise<UserOutput> {
+    return this.usersService.setRoles(id, input.roles);
   }
 
   // ── Admin: Deactivate a user (soft delete) ────────────────────────────────

@@ -8,6 +8,7 @@ const makeServiceMock = () => ({
   findAll: jest.fn(),
   findById: jest.fn(),
   update: jest.fn(),
+  setRoles: jest.fn(),
   deactivate: jest.fn(),
 });
 
@@ -67,6 +68,15 @@ describe('UsersController', () => {
       service.update.mockResolvedValue({ id: 'user-1', displayName: 'New Name' });
       await controller.updateProfile(caller, input);
       expect(service.update).toHaveBeenCalledWith('user-1', input);
+    });
+  });
+
+  describe('setRoles()', () => {
+    it('delegates to service.setRoles with the target id and roles', async () => {
+      const { controller, service } = makeController();
+      service.setRoles.mockResolvedValue({ id: 'user-9', roles: ['moderator'] });
+      await controller.setRoles('user-9', { roles: ['moderator'] } as any);
+      expect(service.setRoles).toHaveBeenCalledWith('user-9', ['moderator']);
     });
   });
 

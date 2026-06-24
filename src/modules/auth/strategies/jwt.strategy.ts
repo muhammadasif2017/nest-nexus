@@ -18,9 +18,12 @@ export interface JwtPayload {
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  // Caches isActive status per user for 30s to avoid a DB round-trip on every request.
-  // Deactivated users are blocked within 30s — acceptable since JWT itself is 15 min.
-  private readonly activeCache = new Map<string, { ok: boolean; exp: number }>();
+  // Caches isActive status + current roles per user for 30s to avoid a DB
+  // round-trip on every request. Deactivated users are blocked within 30s, and a
+  // role change takes effect within 30s — acceptable since the JWT is 15 min.
+  // Roles are sourced from the DB here (not trusted from the token) so a role
+  // change applies to already-issued tokens without waiting for refresh.
+  private readonly activeCache = new Map<string, { ok: boolean; roles: string[]; exp: number }>();
   private static readonly CACHE_TTL = 30_000;
   private static readonly MAX_CACHE_SIZE = 10_000;
 
@@ -40,22 +43,33 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     const cached = this.activeCache.get(payload.sub);
     if (cached && cached.exp > now) {
       if (!cached.ok) throw new UnauthorizedException('User account is inactive or not found.');
-      return payload;
+      // Copy: the cached array is shared across requests — never hand out the reference.
+      return { ...payload, roles: [...cached.roles] };
     }
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      select: { isActive: true },
+      select: { isActive: true, roles: true },
     });
 
     const ok = !!user?.isActive;
-    this.setCacheEntry(payload.sub, { ok, exp: now + JwtStrategy.CACHE_TTL });
+    this.setCacheEntry(payload.sub, {
+      ok,
+      roles: user?.roles ?? [],
+      exp: now + JwtStrategy.CACHE_TTL,
+    });
 
     if (!ok) throw new UnauthorizedException('User account is inactive or not found.');
-    return payload;
+    // Override the token's roles with the DB source of truth — a role change
+    // applies here without waiting for the token to refresh. Copy: this array is
+    // also held in the cache entry — never hand out the cached reference.
+    return { ...payload, roles: [...(user?.roles ?? [])] };
   }
 
-  private setCacheEntry(userId: string, entry: { ok: boolean; exp: number }): void {
+  private setCacheEntry(
+    userId: string,
+    entry: { ok: boolean; roles: string[]; exp: number },
+  ): void {
     this.activeCache.set(userId, entry);
     if (this.activeCache.size > JwtStrategy.MAX_CACHE_SIZE) {
       const now = Date.now();

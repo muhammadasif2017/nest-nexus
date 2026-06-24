@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, ConflictException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { UsersService } from './users.service';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -24,13 +24,19 @@ const makeRawUser = (overrides: Record<string, unknown> = {}) => ({
 
 // ── Prisma mock builder ───────────────────────────────────────────────────────
 
-const makePrismaMock = () => ({
-  user: {
-    findMany: jest.fn().mockResolvedValue([]),
-    findUnique: jest.fn().mockResolvedValue(null),
-    update: jest.fn().mockResolvedValue(makeRawUser()),
-  },
-});
+const makePrismaMock = () => {
+  const mock: any = {
+    user: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findUnique: jest.fn().mockResolvedValue(null),
+      update: jest.fn().mockResolvedValue(makeRawUser()),
+      count: jest.fn().mockResolvedValue(0),
+    },
+  };
+  // Interactive transaction: run the callback with the same mock as the tx client.
+  mock.$transaction = jest.fn((cb: (tx: typeof mock) => unknown) => cb(mock));
+  return mock;
+};
 
 const makeP2025 = () =>
   new Prisma.PrismaClientKnownRequestError('Record to update not found.', {
@@ -309,6 +315,82 @@ describe('UsersService', () => {
       prisma.user.update.mockRejectedValue(makeP2025());
       await expect(service.update('missing-id', dto)).rejects.toThrow();
       expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── setRoles ──────────────────────────────────────────────────────────────────
+
+  describe('setRoles()', () => {
+    it('writes the new roles via prisma.user.update', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['user'] });
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['moderator'] }));
+      await service.setRoles('user-id-1', ['moderator'] as any);
+      expect(prisma.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-id-1' },
+        data: { roles: ['moderator'] },
+      });
+    });
+
+    it('returns updated UserOutput with new roles', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['user'] });
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['moderator'] }));
+      const result = await service.setRoles('user-id-1', ['moderator'] as any);
+      expect(result.roles).toEqual(['moderator']);
+    });
+
+    it('emits user.updated after a successful change', async () => {
+      const { service, prisma, eventEmitter } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['user'] });
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['admin'] }));
+      await service.setRoles('user-id-1', ['admin'] as any);
+      expect(eventEmitter.emit).toHaveBeenCalledWith('user.updated', { userId: 'user-id-1' });
+    });
+
+    it('skips the last-super_admin check when new roles still include super_admin', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['super_admin'] }));
+      await service.setRoles('user-id-1', ['super_admin'] as any);
+      expect(prisma.user.count).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when demoting the last super_admin', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['super_admin'] });
+      prisma.user.count.mockResolvedValue(1);
+      await expect(service.setRoles('user-id-1', ['admin'] as any)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('allows demoting a super_admin when others remain', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['super_admin'] });
+      prisma.user.count.mockResolvedValue(2);
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['admin'] }));
+      const result = await service.setRoles('user-id-1', ['admin'] as any);
+      expect(result.roles).toEqual(['admin']);
+    });
+
+    it('throws NotFoundException when the target user does not exist', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue(null);
+      await expect(service.setRoles('missing-id', ['admin'] as any)).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('runs the check and write in a Serializable transaction', async () => {
+      const { service, prisma } = makeService();
+      prisma.user.findUnique.mockResolvedValue({ roles: ['user'] });
+      prisma.user.update.mockResolvedValue(makeRawUser({ roles: ['moderator'] }));
+      await service.setRoles('user-id-1', ['moderator'] as any);
+      expect(prisma.$transaction).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({ isolationLevel: 'Serializable' }),
+      );
     });
   });
 

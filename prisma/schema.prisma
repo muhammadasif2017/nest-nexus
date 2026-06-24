@@ -100,3 +100,34 @@ model OauthProvider {
   @@unique([provider, providerId])
   @@index([userId])
 }
+
+// Demo resource protected by all four authorization techniques.
+// ownerId drives ReBAC ownership; visibility is the ABAC attribute.
+model Document {
+  id         String   @id @default(uuid())
+  title      String   @db.VarChar(200)
+  body       String
+  ownerId    String
+  visibility String   @default("private") // private | internal | public
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+// ReBAC relationship tuples (Zanzibar-lite): "subject has relation on object".
+// Flat tuples only; relation implication (owner ⇒ editor ⇒ viewer) is resolved
+// in code, not stored.
+model RelationTuple {
+  id          String   @id @default(uuid())
+  subjectType String // "user"
+  subjectId   String // userId
+  relation    String // "owner" | "editor" | "viewer"
+  objectType  String // "document"
+  objectId    String
+  createdAt   DateTime @default(now())
+
+  @@unique([subjectType, subjectId, relation, objectType, objectId])
+  @@index([objectType, objectId, relation])
+  @@index([subjectType, subjectId])
+}
