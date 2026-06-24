@@ -46,16 +46,20 @@ export class DocumentService {
   }
 
   // List is object-level filtered: return only documents the user can read.
-  // Paginated (bounded page) + bulk-filtered (O(1) queries, no per-row N+1). The
-  // route scope guard already enforced the document:read permission.
+  // The readability filter is pushed into the DB query so skip/take paginate over
+  // the readable subset — filtering after pagination would yield short/empty pages
+  // and make the readable set impossible to page through. The route scope guard
+  // already enforced the document:read permission.
   async findAll(user: AuthSubject, query: PaginationQuery): Promise<DocumentOutput[]> {
+    const where = await this.authz.readableDocumentWhere(user);
+    if (!where) return [];
     const docs = await this.prisma.document.findMany({
+      where,
       skip: query.skip,
       take: query.take,
       orderBy: { createdAt: 'desc' },
     });
-    const readable = await this.authz.filterReadableDocuments(user, docs);
-    return readable.map((d) => this.toOutput(d));
+    return docs.map((d) => this.toOutput(d));
   }
 
   // Single read: composed decision (read:any scope | ABAC visibility | viewer
@@ -87,11 +91,14 @@ export class DocumentService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.prisma.document.delete({ where: { id } }).catch((e) => this.rethrowNotFound(e, id));
-    // Drop dangling relation tuples for the deleted document.
-    await this.prisma.relationTuple.deleteMany({
-      where: { objectType: DOCUMENT, objectId: id },
-    });
+    // Delete the document and its relation tuples atomically — otherwise a failure
+    // between the two leaves orphan owner/editor/viewer tuples for a dead object.
+    await this.prisma
+      .$transaction([
+        this.prisma.document.delete({ where: { id } }),
+        this.prisma.relationTuple.deleteMany({ where: { objectType: DOCUMENT, objectId: id } }),
+      ])
+      .catch((e) => this.rethrowNotFound(e, id));
   }
 
   // Sharing grants a relation to another user. Ownership is NOT transferable via

@@ -61,8 +61,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
 
     if (!ok) throw new UnauthorizedException('User account is inactive or not found.');
     // Override the token's roles with the DB source of truth — a role change
-    // applies here without waiting for the token to refresh.
-    return { ...payload, roles: user!.roles };
+    // applies here without waiting for the token to refresh. Copy: this array is
+    // also held in the cache entry — never hand out the cached reference.
+    return { ...payload, roles: [...(user?.roles ?? [])] };
   }
 
   private setCacheEntry(

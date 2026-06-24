@@ -82,27 +82,20 @@ export class RelationService {
     return !!tuple;
   }
 
-  // Bulk variant of check() for a page of objects: returns the set of objectIds
-  // (within `objectIds`) on which the subject holds `required` or stronger. One
-  // query instead of one per object — avoids an N+1 in list filtering.
-  async satisfyingObjectIds(
-    subjectId: string,
-    required: Relation,
-    objectType: string,
-    objectIds: string[],
-  ): Promise<Set<string>> {
-    if (objectIds.length === 0) return new Set();
+  // All objectIds of `objectType` on which the subject holds `required` or a
+  // stronger relation. Used to build a DB-level read filter for list endpoints
+  // (one query, paginated downstream — no per-row N+1).
+  async objectIdsFor(subjectId: string, required: Relation, objectType: string): Promise<string[]> {
     const tuples = await this.prisma.relationTuple.findMany({
       where: {
         subjectType: SUBJECT_TYPE,
         subjectId,
         objectType,
-        objectId: { in: objectIds },
         relation: { in: this.grantorsOf(required) },
       },
       select: { objectId: true },
     });
-    return new Set(tuples.map((t) => t.objectId));
+    return tuples.map((t) => t.objectId);
   }
 
   // Relations that satisfy `required` via the implication map.

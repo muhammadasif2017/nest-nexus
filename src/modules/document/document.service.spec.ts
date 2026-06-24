@@ -23,7 +23,7 @@ describe('DocumentService', () => {
     relationTuple: { deleteMany: jest.Mock };
   };
   let authz: {
-    filterReadableDocuments: jest.Mock;
+    readableDocumentWhere: jest.Mock;
     can: jest.Mock;
     isSuperAdmin: jest.Mock;
   };
@@ -41,7 +41,7 @@ describe('DocumentService', () => {
       relationTuple: { deleteMany: jest.fn() },
     };
     authz = {
-      filterReadableDocuments: jest.fn(),
+      readableDocumentWhere: jest.fn(),
       can: jest.fn(),
       isSuperAdmin: jest.fn().mockReturnValue(false),
     };
@@ -53,22 +53,29 @@ describe('DocumentService', () => {
     );
   });
 
-  describe('findAll — paginated bulk filter', () => {
-    it('passes skip/take through and returns the readable subset', async () => {
-      const docs = [row({ id: 'a' }), row({ id: 'b' })];
+  describe('findAll — paginated over the DB-level readable filter', () => {
+    it('paginates over the readable where-clause and returns the rows', async () => {
+      const where = { OR: [{ ownerId: 'u1' }] };
+      authz.readableDocumentWhere.mockResolvedValue(where);
+      const docs = [row({ id: 'a' })];
       prisma.document.findMany.mockResolvedValue(docs);
-      authz.filterReadableDocuments.mockResolvedValue([docs[0]]);
 
       const result = await service.findAll(user(), { skip: 10, take: 5 });
 
       expect(prisma.document.findMany).toHaveBeenCalledWith({
+        where,
         skip: 10,
         take: 5,
         orderBy: { createdAt: 'desc' },
       });
-      expect(authz.filterReadableDocuments).toHaveBeenCalledWith(user(), docs);
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('a');
+      expect(result.map((d) => d.id)).toEqual(['a']);
+    });
+
+    it('returns [] without a query when the user may read nothing', async () => {
+      authz.readableDocumentWhere.mockResolvedValue(null);
+      const result = await service.findAll(user(), { skip: 0, take: 20 });
+      expect(result).toEqual([]);
+      expect(prisma.document.findMany).not.toHaveBeenCalled();
     });
   });
 

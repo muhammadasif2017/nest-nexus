@@ -14,12 +14,12 @@ const doc = (overrides: Partial<DocumentResource> = {}): DocumentResource => ({
 
 describe('AuthorizationService', () => {
   let authz: AuthorizationService;
-  let relation: { check: jest.Mock; satisfyingObjectIds: jest.Mock };
+  let relation: { check: jest.Mock; objectIdsFor: jest.Mock };
 
   beforeEach(() => {
     relation = {
       check: jest.fn().mockResolvedValue(false),
-      satisfyingObjectIds: jest.fn().mockResolvedValue(new Set<string>()),
+      objectIdsFor: jest.fn().mockResolvedValue([]),
     };
     authz = new AuthorizationService(relation as unknown as RelationService);
   });
@@ -162,45 +162,45 @@ describe('AuthorizationService', () => {
     });
   });
 
-  describe('filterReadableDocuments() — bulk read filter', () => {
-    const docs = [
-      doc({ id: 'a', visibility: 'public' }),
-      doc({ id: 'b', visibility: 'private' }),
-      doc({ id: 'c', visibility: 'private' }),
-    ];
-
-    it('returns [] for a null user', async () => {
-      expect(await authz.filterReadableDocuments(null, docs)).toEqual([]);
-      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+  describe('readableDocumentWhere() — DB-level read filter', () => {
+    it('returns null for a null user', async () => {
+      expect(await authz.readableDocumentWhere(null)).toBeNull();
+      expect(relation.objectIdsFor).not.toHaveBeenCalled();
     });
 
-    it('returns [] when the role lacks the read scope', async () => {
-      expect(await authz.filterReadableDocuments(subject(['ghost']), docs)).toEqual([]);
+    it('returns null when the role lacks the read scope', async () => {
+      expect(await authz.readableDocumentWhere(subject(['ghost']))).toBeNull();
     });
 
-    it('returns the whole page for super_admin without a relation query', async () => {
-      const result = await authz.filterReadableDocuments(subject([Role.SUPER_ADMIN]), docs);
-      expect(result).toEqual(docs);
-      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+    it('returns {} (every row) for super_admin without a relation query', async () => {
+      expect(await authz.readableDocumentWhere(subject([Role.SUPER_ADMIN]))).toEqual({});
+      expect(relation.objectIdsFor).not.toHaveBeenCalled();
     });
 
-    it('returns the whole page for a read:any holder without a relation query', async () => {
-      const result = await authz.filterReadableDocuments(subject([Role.MODERATOR]), docs);
-      expect(result).toEqual(docs);
-      expect(relation.satisfyingObjectIds).not.toHaveBeenCalled();
+    it('returns {} (every row) for a read:any holder without a relation query', async () => {
+      expect(await authz.readableDocumentWhere(subject([Role.MODERATOR]))).toEqual({});
+      expect(relation.objectIdsFor).not.toHaveBeenCalled();
     });
 
-    it('keeps public (ABAC) + viewer-relation (ReBAC) rows, drops the rest', async () => {
-      // 'b' granted via a viewer tuple; 'c' has neither attribute nor relation.
-      relation.satisfyingObjectIds.mockResolvedValue(new Set(['b']));
-      const result = await authz.filterReadableDocuments(subject([Role.USER], 'stranger'), docs);
-      expect(result.map((d) => d.id)).toEqual(['a', 'b']);
-      expect(relation.satisfyingObjectIds).toHaveBeenCalledWith(
-        'stranger',
-        Relation.VIEWER,
-        'document',
-        ['a', 'b', 'c'],
-      );
+    it('builds an OR of ABAC visibility + ownership + viewer-relation ids', async () => {
+      relation.objectIdsFor.mockResolvedValue(['b']);
+      const where = await authz.readableDocumentWhere(subject([Role.USER], 'stranger'));
+      expect(where).toEqual({
+        OR: [
+          { visibility: { in: ['public', 'internal'] } },
+          { ownerId: 'stranger' },
+          { id: { in: ['b'] } },
+        ],
+      });
+      expect(relation.objectIdsFor).toHaveBeenCalledWith('stranger', Relation.VIEWER, 'document');
+    });
+
+    it('omits the id clause when the subject holds no viewer tuples', async () => {
+      relation.objectIdsFor.mockResolvedValue([]);
+      const where = await authz.readableDocumentWhere(subject([Role.USER], 'stranger'));
+      expect(where).toEqual({
+        OR: [{ visibility: { in: ['public', 'internal'] } }, { ownerId: 'stranger' }],
+      });
     });
   });
 });

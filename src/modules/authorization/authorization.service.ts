@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Role } from '../../common/enums/role.enum';
 import { Permission } from '../../common/enums/permission.enum';
 import { ROLE_PERMISSIONS } from './rbac/role-permissions.map';
@@ -76,26 +77,29 @@ export class AuthorizationService {
     }
   }
 
-  // Bulk read filter for a page of documents — same read decision as can()
-  // (read:any scope | ABAC visibility | ReBAC viewer) but resolved in O(1)
-  // queries instead of one relation check per row. Returns the readable subset.
-  async filterReadableDocuments<T extends DocumentResource>(
+  // DB-level read filter for list endpoints. Returns a Prisma where-clause that
+  // matches exactly the documents the user may read, so pagination (skip/take)
+  // runs over the readable subset — not the whole table, which would yield short
+  // or empty pages and make the readable set impossible to page through.
+  // Mirrors the document.read decision:
+  //   read:any / super_admin → every row ({})
+  //   otherwise              → ABAC visibility (public|internal) ∪ owned ∪
+  //                            ReBAC-viewer rows
+  // null → the user may read nothing (caller should return []).
+  async readableDocumentWhere(
     user: AuthSubject | undefined | null,
-    docs: T[],
-  ): Promise<T[]> {
-    if (!user || !this.hasPermission(user, Permission.DOCUMENT_READ)) return [];
-    // super_admin and read:any holders may read everything in the page.
+  ): Promise<Prisma.DocumentWhereInput | null> {
+    if (!user || !this.hasPermission(user, Permission.DOCUMENT_READ)) return null;
     if (this.isSuperAdmin(user) || this.hasPermission(user, Permission.DOCUMENT_READ_ANY)) {
-      return docs;
+      return {};
     }
-    const viewable = await this.relation.satisfyingObjectIds(
-      user.sub,
-      Relation.VIEWER,
-      DOCUMENT,
-      docs.map((d) => d.id),
-    );
-    return docs.filter(
-      (d) => evaluatePolicy('document.read', { user, resource: d }) || viewable.has(d.id),
-    );
+    const viewableIds = await this.relation.objectIdsFor(user.sub, Relation.VIEWER, DOCUMENT);
+    return {
+      OR: [
+        { visibility: { in: ['public', 'internal'] } },
+        { ownerId: user.sub },
+        ...(viewableIds.length ? [{ id: { in: viewableIds } }] : []),
+      ],
+    };
   }
 }
