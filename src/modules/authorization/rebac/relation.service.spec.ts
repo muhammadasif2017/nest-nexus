@@ -1,5 +1,4 @@
 import { NotFoundException } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { RelationService, Relation } from './relation.service';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
@@ -13,7 +12,6 @@ describe('RelationService', () => {
       findMany: jest.Mock;
     };
   };
-  let emitter: { emit: jest.Mock };
 
   beforeEach(() => {
     prisma = {
@@ -23,38 +21,28 @@ describe('RelationService', () => {
         findFirst: jest.fn(),
       },
     };
-    emitter = { emit: jest.fn() };
-    service = new RelationService(
-      prisma as unknown as PrismaService,
-      emitter as unknown as EventEmitter2,
-    );
+    service = new RelationService(prisma as unknown as PrismaService);
   });
 
   describe('grant', () => {
-    it('upserts the tuple and emits authz.relation.changed', async () => {
+    it('upserts the tuple', async () => {
       await service.grant('u1', Relation.VIEWER, 'document', 'd1');
       expect(prisma.relationTuple.upsert).toHaveBeenCalledTimes(1);
-      expect(emitter.emit).toHaveBeenCalledWith('authz.relation.changed', {
-        subjectId: 'u1',
-        objectType: 'document',
-        objectId: 'd1',
-      });
     });
   });
 
   describe('revoke', () => {
-    it('deletes and emits when a tuple existed', async () => {
+    it('deletes when a tuple existed', async () => {
       prisma.relationTuple.deleteMany.mockResolvedValue({ count: 1 });
       await service.revoke('u1', Relation.VIEWER, 'document', 'd1');
-      expect(emitter.emit).toHaveBeenCalledTimes(1);
+      expect(prisma.relationTuple.deleteMany).toHaveBeenCalledTimes(1);
     });
 
-    it('throws NotFound and does not emit when nothing deleted', async () => {
+    it('throws NotFound when nothing deleted', async () => {
       prisma.relationTuple.deleteMany.mockResolvedValue({ count: 0 });
       await expect(service.revoke('u1', Relation.VIEWER, 'document', 'd1')).rejects.toThrow(
         NotFoundException,
       );
-      expect(emitter.emit).not.toHaveBeenCalled();
     });
   });
 

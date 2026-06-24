@@ -30,8 +30,9 @@ exposed at the route via `@RequireRelation(...)` + `RelationGuard`.
   `(objectType, objectId, relation)`.
 - **Guard loads only the `:id`** (no resource row needed — tuples reference `objectId`).
   `super_admin` bypasses.
-- **Mutations emit `authz.relation.changed`** via `EventEmitter2` rather than calling the
-  cache directly, per the project's event-driven cache-invalidation convention.
+- **Relation checks are not cached** — `check()`/`objectIdsFor()` query the DB per request,
+  so a grant/revoke takes effect immediately with no cache to invalidate (no
+  `authz.relation.changed` event is emitted). Add one only if a relation cache is introduced.
 - **Grant is idempotent** (`upsert`) — re-sharing the same relation is a no-op, not a
   conflict. **Revoke** of a non-existent tuple throws `NotFoundException`.
 - **Document deletion cascades tuple cleanup** in the service (`deleteMany` on the

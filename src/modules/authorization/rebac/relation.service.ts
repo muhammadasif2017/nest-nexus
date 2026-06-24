@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../core/prisma/prisma.service';
 
 // ReBAC relations on a document, strongest first.
@@ -21,10 +20,7 @@ const SUBJECT_TYPE = 'user';
 
 @Injectable()
 export class RelationService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly eventEmitter: EventEmitter2,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // Idempotent grant — re-granting the same tuple is a no-op, not a conflict.
   async grant(
@@ -46,7 +42,6 @@ export class RelationService {
       create: { subjectType: SUBJECT_TYPE, subjectId, relation, objectType, objectId },
       update: {},
     });
-    this.emitChanged(subjectId, objectType, objectId);
   }
 
   async revoke(
@@ -59,7 +54,6 @@ export class RelationService {
       where: { subjectType: SUBJECT_TYPE, subjectId, relation, objectType, objectId },
     });
     if (count === 0) throw new NotFoundException('Relation tuple not found.');
-    this.emitChanged(subjectId, objectType, objectId);
   }
 
   // True if the subject holds `required` (directly or via a stronger relation).
@@ -103,9 +97,5 @@ export class RelationService {
     return (Object.keys(RELATION_IMPLIES) as Relation[]).filter((r) =>
       RELATION_IMPLIES[r].includes(required),
     );
-  }
-
-  private emitChanged(subjectId: string, objectType: string, objectId: string): void {
-    this.eventEmitter.emit('authz.relation.changed', { subjectId, objectType, objectId });
   }
 }
