@@ -4,7 +4,6 @@ const validConfig = {
   NODE_ENV: 'test',
   PORT: '3000',
   CLIENT_ORIGIN: 'http://localhost:3000',
-  SESSION_SECRET: 'a'.repeat(32),
   DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/nest_nexus',
   REDIS_HOST: 'localhost',
   REDIS_PORT: '6379',
@@ -102,22 +101,6 @@ describe('configValidationSchema', () => {
     });
   });
 
-  describe('SESSION_SECRET validation', () => {
-    it('throws when SESSION_SECRET is shorter than 32 chars', () => {
-      expect(() => configValidationSchema({ ...validConfig, SESSION_SECRET: 'short' })).toThrow();
-    });
-
-    it('throws when SESSION_SECRET is missing', () => {
-      const { SESSION_SECRET: _, ...rest } = validConfig;
-      expect(() => configValidationSchema(rest)).toThrow();
-    });
-
-    it('accepts SESSION_SECRET of exactly 32 chars', () => {
-      const result = configValidationSchema({ ...validConfig, SESSION_SECRET: 'x'.repeat(32) });
-      expect(result.SESSION_SECRET).toHaveLength(32);
-    });
-  });
-
   describe('DATABASE_URL validation', () => {
     it('throws when DATABASE_URL does not start with postgresql', () => {
       expect(() =>
@@ -201,7 +184,7 @@ describe('configValidationSchema', () => {
       } catch (e: unknown) {
         const message = (e as Error).message;
         expect(message).toContain('CLIENT_ORIGIN');
-        expect(message).toContain('SESSION_SECRET');
+        expect(message).toContain('DATABASE_URL');
       }
     });
   });

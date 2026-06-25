@@ -12,14 +12,9 @@ import { QUEUE_EMAIL } from './core/queues/queues.constants';
 import { ApiKeyService } from './modules/auth/api-key/api-key.service';
 import { createApiKeyExpressMiddleware } from './common/guards/api-key.guard';
 
-import { Request, Response, NextFunction } from 'express';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { doubleCsrf } from 'csrf-csrf';
 import compression from 'compression';
-import session from 'express-session';
-import connectPgSimple from 'connect-pg-simple';
-import { Pool } from 'pg';
 
 import { Logger } from 'nestjs-pino';
 
@@ -33,8 +28,6 @@ async function bootstrap() {
   const PORT = config.get<number>('app.port', 3000);
   const NODE_ENV = config.get<string>('app.nodeEnv');
   const isDev = NODE_ENV !== 'production';
-  const SESSION_SECRET = config.get<string>('app.sessionSecret');
-  const DATABASE_URL = config.get<string>('database.url');
   const CLIENT_ORIGIN = config.get<string>('app.clientOrigin');
 
   app.useLogger(app.get(Logger));
@@ -61,67 +54,6 @@ async function bootstrap() {
 
   // Must come BEFORE csurf so it can read the CSRF cookie from the request.
   app.use(cookieParser());
-
-  if (!SESSION_SECRET) {
-    throw new Error('SESSION_SECRET is not defined in environment variables');
-  }
-
-  const PgSession = connectPgSimple(session);
-  const pgPool = new Pool({
-    connectionString: DATABASE_URL,
-    max: config.get<number>('database.sessionPoolMax'),
-  });
-
-  app.use(
-    session({
-      secret: SESSION_SECRET,
-      resave: false,
-      saveUninitialized: false,
-      store: new PgSession({ pool: pgPool, createTableIfMissing: true }),
-      cookie: {
-        httpOnly: true,
-        secure: !isDev,
-        sameSite: 'strict',
-        maxAge: 1000 * 60 * 60 * 24, // 24 hours
-      },
-    }),
-  );
-
-  // ── CSRF Protection ───────────────────────────────────────────────────────
-  // Double-submit cookie pattern: server sets XSRF-TOKEN cookie; client JS
-  // reads it and sends the value back as X-CSRF-Token header on mutating requests.
-  // JWT Bearer routes are CSRF-immune (browsers can't auto-send Bearer headers),
-  // so we scope CSRF to session-based routes only.
-  const { doubleCsrfProtection } = doubleCsrf({
-    getSecret: () => SESSION_SECRET!,
-    // Ties the token to the session ID so token fixation is not possible.
-    getSessionIdentifier: (req) => req.session?.id ?? req.ip ?? '',
-    cookieName: 'XSRF-TOKEN',
-    cookieOptions: {
-      httpOnly: false, // Client JS must read this to send as header
-      sameSite: 'strict',
-      secure: !isDev,
-    },
-    getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
-  });
-  app.use('/api/v1/auth/session', doubleCsrfProtection);
-
-  // doubleCsrfProtection is raw Express middleware, outside Nest's pipeline — its errors
-  // never reach GlobalExceptionFilter and would otherwise surface as a bare 500 with a
-  // leaked stack trace. Catch it here and match the filter's REST error envelope.
-  app.use(
-    '/api/v1/auth/session',
-    (err: { code?: string }, req: Request, res: Response, next: NextFunction) => {
-      if (err?.code !== 'EBADCSRFTOKEN') return next(err);
-      res.status(403).json({
-        statusCode: 403,
-        errorCode: 'FORBIDDEN',
-        message: 'Invalid or missing CSRF token.',
-        path: req.originalUrl,
-        timestamp: new Date().toISOString(),
-      });
-    },
-  );
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────
   // All REST routes become /api/v1/... or /api/v2/...
@@ -180,11 +112,7 @@ async function bootstrap() {
     );
   }
 
-  // Drain the pg pool used by connect-pg-simple when the process shuts down.
-  // NestJS shutdown hooks handle SIGTERM/SIGINT for the app itself; the pool
-  // is a local variable here so it needs its own cleanup handler.
   app.enableShutdownHooks();
-  ['SIGTERM', 'SIGINT'].forEach((sig) => process.once(sig, () => pgPool.end()));
 
   await app.listen(PORT);
   console.log(`🚀 Server running at http://localhost:${PORT}/api/v1`);
