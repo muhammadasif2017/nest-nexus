@@ -15,7 +15,6 @@ import { createApiKeyExpressMiddleware } from './common/guards/api-key.guard';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
-
 import { Logger } from 'nestjs-pino';
 
 async function bootstrap() {
