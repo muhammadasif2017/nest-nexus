@@ -97,7 +97,7 @@ versions are pinned to match `docker-compose.yml` (not `latest`).
   pass.
 - Production deploys now have a real artifact (`docker build -t nest-nexus .`)
   instead of no containerization story at all.
-- 2FA, OAuth, magic-link, and session-auth flows remain untested at the e2e
+- 2FA, OAuth, and magic-link flows remain untested at the e2e
   level — same gap as before, just explicitly deferred rather than silently
   missing. ClamAV/MinIO-dependent code paths are also untested in CI (CI job
   services are postgres+redis only, matching e2e scope).

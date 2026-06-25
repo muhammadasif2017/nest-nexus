@@ -4,11 +4,9 @@ export const configValidationSchema = (config: Record<string, unknown>) => {
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().default(3000),
     CLIENT_ORIGIN: z.string().url(),
-    SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 chars'),
 
     DATABASE_URL: z.string().startsWith('postgresql'),
     DATABASE_POOL_MAX: z.coerce.number().min(1).max(200).default(10),
-    DATABASE_SESSION_POOL_MAX: z.coerce.number().min(1).max(20).default(5),
 
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.coerce.number().default(6379),
