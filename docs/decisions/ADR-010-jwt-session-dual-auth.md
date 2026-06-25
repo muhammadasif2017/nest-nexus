@@ -1,7 +1,7 @@
 # ADR-010: JWT + express-session Dual Authentication
 
 ## Status
-Accepted
+Superseded by ADR-030 (session flow removed; JWT remains)
 
 ## Date
 2026-06-16

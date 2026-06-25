@@ -1,8 +1,7 @@
 # ADR-014: Split Session-Based Auth into SessionAuthModule
 
 ## Status
-Accepted (amends ADR-010's module organization; does not change the underlying
-JWT + session decision)
+Superseded by ADR-030 (SessionAuthModule removed entirely)
 
 ## Date
 2026-06-17

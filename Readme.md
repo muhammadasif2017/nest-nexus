@@ -1,11 +1,10 @@
 # Nexus
 
-> What does it take to support six authentication methods in one NestJS backend — OAuth, 2FA, passkeys, magic links, API keys, and sessions? I built them to find out.
+> What does it take to support five authentication methods in one NestJS backend — OAuth, 2FA, passkeys, magic links, and API keys? I built them to find out.
 
-Most backends ship one auth flow and call it done. Nexus implements six —
-OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, API keys, and server-side
-sessions — alongside a hardened JWT core with refresh-token rotation and
-family-based reuse detection.
+Most backends ship one auth flow and call it done. Nexus implements five —
+OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, and API keys — alongside a
+hardened JWT core with refresh-token rotation and family-based reuse detection.
 
 The auth lives in a realistic setting: Postgres/Prisma, Redis, BullMQ queues
 with dead-letter handling — the infrastructure a real service runs on, so the auth
@@ -24,14 +23,14 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Framework** | NestJS 11 | Module system, DI container, decorators |
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
 | **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
-| **Auth** | JWT + Sessions + OAuth2 | Hybrid authentication, token rotation |
+| **Auth** | JWT + OAuth2 | Token-based authentication, rotation |
 | **Authorization** | RBAC · Scopes · ABAC · ReBAC | Four techniques behind one decision point |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
 | **Passwordless** | Magic links | Email-based authentication |
 | **Cache** | Redis (ioredis) | Application cache + BullMQ backbone |
 | **Queues** | BullMQ | Background jobs, retries, dead-letter |
 | **Scheduler** | @nestjs/schedule | Cron jobs with distributed locking |
-| **Security** | Helmet, CSRF, Throttler | Layered HTTP security hardening |
+| **Security** | Helmet, Throttler | Layered HTTP security hardening |
 | **Health** | Terminus | Kubernetes-ready liveness/readiness probes |
 | **Logging** | Pino | Structured JSON logs with redaction |
 | **Containers** | Docker + Compose | Full local stack in one command |
@@ -62,9 +61,8 @@ cp .env.example .env
 Open `.env` and fill in the required values. The four you must set before anything works:
 
 ```bash
-SESSION_SECRET=     # 64-char random hex: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
-JWT_SECRET=         # 64-char random hex (different from SESSION_SECRET)
-JWT_REFRESH_SECRET= # 64-char random hex (different from both above)
+JWT_SECRET=         # 64-char random hex
+JWT_REFRESH_SECRET= # 64-char random hex (different from JWT_SECRET)
 DATABASE_URL=       # postgresql://user:password@localhost:5432/nest_nexus
 ```
 
@@ -151,7 +149,6 @@ src/
 │
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
-    ├── session-auth/                # Server-side session login (separate module)
     ├── authorization/              # RBAC/Scopes, ABAC policies, ReBAC tuples — one decision point
     ├── document/                   # Demo resource exercising all four authz techniques
     └── users/                       # REST controller, serialization
@@ -168,18 +165,17 @@ prisma/
 
 ### Security is layered, not bolted on
 
-Every incoming request passes through seven security layers before reaching application code:
-CORS → Helmet → Compression → Cookie Parser → Session → Rate Limiting → Guards.
+Every incoming request passes through six security layers before reaching application code:
+CORS → Helmet → Compression → Cookie Parser → Rate Limiting → Guards.
 Each layer has a single, non-overlapping responsibility. Removing one degrades security
 in exactly one dimension, which makes the tradeoffs explicit.
 
-### Authentication is hybrid by design
+### Authentication is JWT-first
 
-The JWT path (stateless Bearer tokens + HttpOnly refresh cookie) serves API clients — mobile
-apps, SPAs, third-party integrations — that manage their own session state. The session path
-(server-side sessions in PostgreSQL via `connect-pg-simple`) serves traditional web clients
-where the server holds state. Both paths share the same `AuthService` and converge on the same
-`req.user` object that guards and decorators read from.
+Stateless Bearer tokens + HttpOnly refresh cookie serve API clients — mobile apps, SPAs,
+third-party integrations. OAuth2 callbacks, 2FA, magic links, WebAuthn, and API keys all
+converge on the same JWT issuance path so guards and decorators read from one consistent
+`req.user` object.
 
 ### Authorization is four techniques behind one decision point
 
@@ -339,7 +335,6 @@ email-verification, 2FA-code, and magic-link messages.
 See `.env.example` for the complete annotated reference. Required variables:
 
 ```bash
-SESSION_SECRET          # 64-char random hex
 JWT_SECRET              # 64-char random hex
 JWT_REFRESH_SECRET      # 64-char random hex (different from JWT_SECRET)
 DATABASE_URL            # postgresql://user:password@host:5432/dbname
