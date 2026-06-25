@@ -19,6 +19,7 @@ describe('RelationService', () => {
         upsert: jest.fn().mockResolvedValue({}),
         deleteMany: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
     };
     service = new RelationService(prisma as unknown as PrismaService);
@@ -72,6 +73,47 @@ describe('RelationService', () => {
       await service.check('u1', Relation.OWNER, 'document', 'd1');
       const where = prisma.relationTuple.findFirst.mock.calls[0][0].where;
       expect(where.relation.in).toEqual([Relation.OWNER]);
+    });
+  });
+
+  describe('objectIdsFor', () => {
+    it('returns mapped objectIds from matching tuples', async () => {
+      prisma.relationTuple.findMany.mockResolvedValue([{ objectId: 'd1' }, { objectId: 'd2' }]);
+      const ids = await service.objectIdsFor('u1', Relation.VIEWER, 'document');
+      expect(ids).toEqual(['d1', 'd2']);
+    });
+
+    it('returns [] when no tuples exist', async () => {
+      prisma.relationTuple.findMany.mockResolvedValue([]);
+      expect(await service.objectIdsFor('u1', Relation.VIEWER, 'document')).toEqual([]);
+    });
+
+    it('queries owner+editor+viewer grantors when viewer is required', async () => {
+      await service.objectIdsFor('u1', Relation.VIEWER, 'document');
+      const where = prisma.relationTuple.findMany.mock.calls[0][0].where;
+      expect(where.relation.in).toEqual(
+        expect.arrayContaining([Relation.OWNER, Relation.EDITOR, Relation.VIEWER]),
+      );
+    });
+
+    it('queries owner+editor grantors when editor is required', async () => {
+      await service.objectIdsFor('u1', Relation.EDITOR, 'document');
+      const where = prisma.relationTuple.findMany.mock.calls[0][0].where;
+      expect(where.relation.in).toEqual(expect.arrayContaining([Relation.OWNER, Relation.EDITOR]));
+      expect(where.relation.in).not.toContain(Relation.VIEWER);
+    });
+
+    it('queries only owner grantor when owner is required', async () => {
+      await service.objectIdsFor('u1', Relation.OWNER, 'document');
+      const where = prisma.relationTuple.findMany.mock.calls[0][0].where;
+      expect(where.relation.in).toEqual([Relation.OWNER]);
+    });
+
+    it('scopes the query to the correct subject and objectType', async () => {
+      await service.objectIdsFor('u1', Relation.VIEWER, 'document');
+      const where = prisma.relationTuple.findMany.mock.calls[0][0].where;
+      expect(where.subjectId).toBe('u1');
+      expect(where.objectType).toBe('document');
     });
   });
 });

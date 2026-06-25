@@ -113,6 +113,16 @@ describe('AuthorizationService', () => {
         ).toBe(true);
       });
 
+      it('allows via ABAC internal visibility', async () => {
+        expect(
+          await authz.can(
+            subject([Role.USER]),
+            Permission.DOCUMENT_READ,
+            doc({ visibility: 'internal' }),
+          ),
+        ).toBe(true);
+      });
+
       it('allows non-owner of a private doc via ReBAC viewer tuple', async () => {
         relation.check.mockResolvedValue(true);
         expect(
@@ -158,6 +168,19 @@ describe('AuthorizationService', () => {
           await authz.can(subject([Role.USER], 'stranger'), Permission.DOCUMENT_DELETE, doc()),
         ).toBe(true);
         expect(relation.check).toHaveBeenCalledWith('stranger', Relation.OWNER, 'document', 'd1');
+      });
+
+      it('allows the document owner without a relation check', async () => {
+        expect(
+          await authz.can(subject([Role.USER], 'owner'), Permission.DOCUMENT_DELETE, doc()),
+        ).toBe(true);
+        expect(relation.check).not.toHaveBeenCalled();
+      });
+
+      it('denies a non-owner without an owner relation tuple', async () => {
+        expect(
+          await authz.can(subject([Role.USER], 'stranger'), Permission.DOCUMENT_DELETE, doc()),
+        ).toBe(false);
       });
     });
   });
