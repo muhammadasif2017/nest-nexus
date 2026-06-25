@@ -32,12 +32,12 @@ async function bootstrap() {
 
   app.useLogger(app.get(Logger));
 
-  // Credentials: true is required for cookies (sessions) to be sent cross-origin.
+  // Credentials: true is required for the HttpOnly refresh_token cookie to be sent cross-origin.
   app.enableCors({
     origin: CLIENT_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-API-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
   });
 
   // Sets ~14 security-related HTTP headers in one shot. We relax contentSecurityPolicy
@@ -52,7 +52,7 @@ async function bootstrap() {
   // Gzip all responses. Skip if Content-Type is already binary (images, etc.)
   app.use(compression());
 
-  // Must come BEFORE csurf so it can read the CSRF cookie from the request.
+  // Required to read the HttpOnly refresh_token cookie on /auth/refresh.
   app.use(cookieParser());
 
   // ── Global Prefix & URI Versioning ────────────────────────────────────────

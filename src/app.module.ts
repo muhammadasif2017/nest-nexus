@@ -43,8 +43,8 @@ import { DocumentModule } from './modules/document/document.module';
     // 10 requests per 60 seconds per IP, globally enforced via APP_GUARD below.
     // Individual routes can override with @Throttle({ default: { limit: 3, ttl: 60000 } })
     // Limits are multiplied outside production — manual auth-flow testing (e.g. the
-    // session-auth csrf-token -> login -> logout round trip) easily exceeds 10/min
-    // from a single browser tab, with no real abuse risk in dev.
+    // OAuth redirect + callback round trip) easily exceeds 10/min from a single
+    // browser tab, with no real abuse risk in dev.
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
