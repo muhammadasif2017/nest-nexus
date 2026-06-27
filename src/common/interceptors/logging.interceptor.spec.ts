@@ -6,6 +6,7 @@ import { LoggingInterceptor } from './logging.interceptor';
 const makeLoggerMock = () => ({
   debug: jest.fn(),
   info: jest.fn(),
+  warn: jest.fn(),
   error: jest.fn(),
 });
 
@@ -58,7 +59,7 @@ describe('LoggingInterceptor', () => {
       });
     });
 
-    it('logs an error with duration on failure', (done) => {
+    it('logs ERROR with duration on 5xx failure', (done) => {
       const error = new Error('boom');
       interceptor.intercept(httpContext(), makeHandler(throwError(() => error))).subscribe({
         error: () => {
@@ -66,6 +67,20 @@ describe('LoggingInterceptor', () => {
             expect.objectContaining({ operationLabel: '[HTTP] GET /users', err: error }),
             'Request failed',
           );
+          done();
+        },
+      });
+    });
+
+    it('logs WARN with duration on 4xx failure', (done) => {
+      const error = Object.assign(new Error('bad input'), { status: 400 });
+      interceptor.intercept(httpContext(), makeHandler(throwError(() => error))).subscribe({
+        error: () => {
+          expect(logger.warn).toHaveBeenCalledWith(
+            expect.objectContaining({ operationLabel: '[HTTP] GET /users', err: error }),
+            'Request failed',
+          );
+          expect(logger.error).not.toHaveBeenCalled();
           done();
         },
       });

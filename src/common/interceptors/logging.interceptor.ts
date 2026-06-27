@@ -27,9 +27,14 @@ export class LoggingInterceptor implements NestInterceptor {
         },
         error: (err) => {
           const duration = Date.now() - startTime;
-          // We log the error here for observability, but the actual error *response*
-          // is handled by the GlobalExceptionFilter — clean separation of concerns.
-          this.logger.error({ operationLabel, duration, err }, 'Request failed');
+          const status: number = err?.status ?? err?.statusCode ?? 500;
+          // 4xx = client error (warn); 5xx = server error (error).
+          // GlobalExceptionFilter owns the response shape — we only log here.
+          if (status >= 400 && status < 500) {
+            this.logger.warn({ operationLabel, duration, err }, 'Request failed');
+          } else {
+            this.logger.error({ operationLabel, duration, err }, 'Request failed');
+          }
         },
       }),
     );
