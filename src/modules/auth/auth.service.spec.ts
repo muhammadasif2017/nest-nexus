@@ -2,8 +2,9 @@ import 'reflect-metadata';
 import {
   ConflictException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
   NotFoundException,
-  TooManyRequestsException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -290,10 +291,12 @@ describe('AuthService', () => {
       expect(result.auth.accessTokenExpiresAt).toBeInstanceOf(Date);
     });
 
-    it('throws TooManyRequestsException when failure count reaches limit', async () => {
+    it('throws 429 when failure count reaches limit', async () => {
       const { service, cache } = makeService();
       cache.get.mockResolvedValue(10);
-      await expect(service.login(dto)).rejects.toThrow(TooManyRequestsException);
+      const err = await service.login(dto).catch((e) => e);
+      expect(err).toBeInstanceOf(HttpException);
+      expect(err.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
       expect(bcryptCompare).not.toHaveBeenCalled();
     });
 

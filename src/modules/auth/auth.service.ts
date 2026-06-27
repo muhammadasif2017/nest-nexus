@@ -1,8 +1,9 @@
 import {
   Injectable,
   Inject,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
-  TooManyRequestsException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -91,8 +92,9 @@ export class AuthService {
 
     const failCount = Number(await this.cache.get(failKey)) || 0;
     if (failCount >= LOGIN_MAX_FAILURES) {
-      throw new TooManyRequestsException(
+      throw new HttpException(
         'Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.',
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 
