@@ -74,7 +74,11 @@ describe('configValidationSchema', () => {
     });
 
     it('accepts production', () => {
-      const result = configValidationSchema({ ...validConfig, NODE_ENV: 'production' });
+      const result = configValidationSchema({
+        ...validConfig,
+        NODE_ENV: 'production',
+        WEBAUTHN_RP_ID: 'example.com',
+      });
       expect(result.NODE_ENV).toBe('production');
     });
 
@@ -168,6 +172,52 @@ describe('configValidationSchema', () => {
       expect(() =>
         configValidationSchema({ ...validConfig, TOTP_ENCRYPTION_KEY: 'g'.repeat(64) }),
       ).toThrow();
+    });
+  });
+
+  describe('WEBAUTHN_RP_ID validation', () => {
+    it('defaults to localhost in non-production', () => {
+      const result = configValidationSchema({ ...validConfig, NODE_ENV: 'development' });
+      expect(result.WEBAUTHN_RP_ID).toBe('localhost');
+    });
+
+    it('throws when WEBAUTHN_RP_ID is localhost in production', () => {
+      expect(() =>
+        configValidationSchema({
+          ...validConfig,
+          NODE_ENV: 'production',
+          WEBAUTHN_RP_ID: 'localhost',
+        }),
+      ).toThrow(/WEBAUTHN_RP_ID/);
+    });
+
+    it('throws when WEBAUTHN_RP_ID is omitted in production (defaults to localhost)', () => {
+      expect(() => configValidationSchema({ ...validConfig, NODE_ENV: 'production' })).toThrow(
+        /WEBAUTHN_RP_ID/,
+      );
+    });
+
+    it('accepts a real domain in production', () => {
+      const result = configValidationSchema({
+        ...validConfig,
+        NODE_ENV: 'production',
+        WEBAUTHN_RP_ID: 'api.example.com',
+      });
+      expect(result.WEBAUTHN_RP_ID).toBe('api.example.com');
+    });
+  });
+
+  describe('OAuth vars validation', () => {
+    it('allows all OAuth vars to be omitted', () => {
+      const result = configValidationSchema(validConfig);
+      expect(result.GOOGLE_CLIENT_ID).toBeUndefined();
+      expect(result.GITHUB_CLIENT_ID).toBeUndefined();
+      expect(result.MICROSOFT_CLIENT_ID).toBeUndefined();
+    });
+
+    it('accepts GOOGLE_CLIENT_ID when provided', () => {
+      const result = configValidationSchema({ ...validConfig, GOOGLE_CLIENT_ID: 'gid-123' });
+      expect(result.GOOGLE_CLIENT_ID).toBe('gid-123');
     });
   });
 
