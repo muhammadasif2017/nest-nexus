@@ -104,11 +104,11 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     // ── Prisma Known Request Errors ────────────────────────────────────────
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
       if (exception.code === 'P2002') {
-        // Unique constraint violation — e.g., duplicate email on register
+        // Unique constraint violation — log field server-side, return generic message to client
         const fields = (exception.meta?.target as string[]) ?? [];
-        const field = fields[0] ?? 'field';
+        this.logger.warn({ fields }, 'P2002 unique constraint violation');
         return {
-          message: `A record with this ${field} already exists.`,
+          message: 'A record with this value already exists.',
           code: ErrorCode.CONFLICT,
           statusCode: HttpStatus.CONFLICT,
         };
