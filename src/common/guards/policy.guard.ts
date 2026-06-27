@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -12,8 +13,14 @@ import { evaluatePolicy } from '../../modules/authorization/abac/policies';
 import { PrismaService } from '../../core/prisma/prisma.service';
 import { getRequestFromContext } from '../utils/execution-context.util';
 
-// ABAC layer. Loads the document named by the :id route param and evaluates the
-// named policy's predicate over the user + resource attributes. super_admin
+// Resource types this guard knows how to load. Throw ISE for anything else so a
+// dev adding @Policy to a non-document route gets a clear programmer error, not
+// silent wrong-resource evaluation.
+const SUPPORTED_RESOURCES = new Set(['document']);
+
+// ABAC layer. Loads the resource named by the :id route param and evaluates the
+// named policy's predicate over the user + resource attributes. The resource type
+// is derived from the policy name prefix (<resource>.<action>). super_admin
 // bypasses. Single-resource routes only (needs :id).
 @Injectable()
 export class PolicyGuard implements CanActivate {
@@ -29,6 +36,14 @@ export class PolicyGuard implements CanActivate {
       context.getClass(),
     ]);
     if (!name) return true;
+
+    const resourceType = name.split('.')[0];
+    if (!SUPPORTED_RESOURCES.has(resourceType)) {
+      throw new InternalServerErrorException(
+        `PolicyGuard does not support resource type '${resourceType}' (policy: '${name}'). ` +
+          `Add a loader for this resource type before using @Policy here.`,
+      );
+    }
 
     const req = getRequestFromContext(context);
     const user = req.user;

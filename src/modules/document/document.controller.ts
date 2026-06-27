@@ -85,7 +85,7 @@ export class DocumentController {
   // ReBAC demo: requires editor (or owner via implication) + write scope.
   @Patch(':id')
   @RequirePermission(Permission.DOCUMENT_WRITE)
-  @RequireRelation(Relation.EDITOR)
+  @RequireRelation(Relation.EDITOR, 'document')
   @ApiOperation({ summary: 'Update a document (scope + ReBAC editor relation)' })
   @ApiResponse({ status: 200, type: DocumentOutput })
   update(
@@ -100,7 +100,7 @@ export class DocumentController {
   @Delete(':id')
   @HttpCode(204)
   @RequirePermission(Permission.DOCUMENT_DELETE)
-  @RequireRelation(Relation.OWNER)
+  @RequireRelation(Relation.OWNER, 'document')
   @ApiOperation({ summary: 'Delete a document (scope + ReBAC owner relation)' })
   @ApiResponse({ status: 204, description: 'Deleted.' })
   remove(@Param('id') id: string): Promise<void> {
@@ -110,7 +110,7 @@ export class DocumentController {
   // ReBAC management: only the owner can share (grant a relation to another user).
   @Post(':id/share')
   @HttpCode(204)
-  @RequireRelation(Relation.OWNER)
+  @RequireRelation(Relation.OWNER, 'document')
   @ApiOperation({ summary: 'Share a document — grant a relation (owner only)' })
   @ApiResponse({ status: 204, description: 'Relation granted.' })
   share(@Param('id') id: string, @Body() dto: ShareDocumentDto): Promise<void> {
@@ -119,7 +119,7 @@ export class DocumentController {
 
   @Delete(':id/share')
   @HttpCode(204)
-  @RequireRelation(Relation.OWNER)
+  @RequireRelation(Relation.OWNER, 'document')
   @ApiOperation({ summary: 'Unshare a document — revoke a relation (owner only)' })
   @ApiResponse({ status: 204, description: 'Relation revoked.' })
   unshare(@Param('id') id: string, @Body() dto: ShareDocumentDto): Promise<void> {
