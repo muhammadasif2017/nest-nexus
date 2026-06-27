@@ -3,6 +3,7 @@ import {
   ConflictException,
   ForbiddenException,
   NotFoundException,
+  TooManyRequestsException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -70,18 +71,26 @@ const makeConfigMock = () => ({
 
 const makeEventEmitterMock = () => ({ emit: jest.fn() });
 
+const makeCacheMock = () => ({
+  get: jest.fn().mockResolvedValue(undefined),
+  set: jest.fn().mockResolvedValue(undefined),
+  del: jest.fn().mockResolvedValue(undefined),
+});
+
 const makeService = () => {
   const prisma = makePrismaMock();
   const tokenService = makeTokenServiceMock();
   const config = makeConfigMock();
   const eventEmitter = makeEventEmitterMock();
+  const cache = makeCacheMock();
   const service = new AuthService(
     prisma as unknown as PrismaService,
     tokenService as any,
     config as unknown as ConfigService,
     eventEmitter as unknown as EventEmitter2,
+    cache as any,
   );
-  return { service, prisma, tokenService, config, eventEmitter };
+  return { service, prisma, tokenService, config, eventEmitter, cache };
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -279,6 +288,48 @@ describe('AuthService', () => {
       bcryptCompare.mockResolvedValue(true);
       const result = await service.login(dto);
       expect(result.auth.accessTokenExpiresAt).toBeInstanceOf(Date);
+    });
+
+    it('throws TooManyRequestsException when failure count reaches limit', async () => {
+      const { service, cache } = makeService();
+      cache.get.mockResolvedValue(10);
+      await expect(service.login(dto)).rejects.toThrow(TooManyRequestsException);
+      expect(bcryptCompare).not.toHaveBeenCalled();
+    });
+
+    it('increments failure counter on wrong password', async () => {
+      const { service, prisma, cache } = makeService();
+      cache.get.mockResolvedValue(3);
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(false);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(cache.set).toHaveBeenCalledWith('login:fail:user@test.com', 4, expect.any(Number));
+    });
+
+    it('increments failure counter when email not found', async () => {
+      const { service, prisma, cache } = makeService();
+      cache.get.mockResolvedValue(0);
+      prisma.user.findUnique.mockResolvedValue(null);
+      bcryptCompare.mockResolvedValue(false);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      expect(cache.set).toHaveBeenCalledWith('login:fail:user@test.com', 1, expect.any(Number));
+    });
+
+    it('clears failure counter on successful login', async () => {
+      const { service, prisma, cache } = makeService();
+      cache.get.mockResolvedValue(5);
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
+      await service.login(dto);
+      expect(cache.del).toHaveBeenCalledWith('login:fail:user@test.com');
+    });
+
+    it('does not increment counter on successful login', async () => {
+      const { service, prisma, cache } = makeService();
+      prisma.user.findUnique.mockResolvedValue(makeUserDoc());
+      bcryptCompare.mockResolvedValue(true);
+      await service.login(dto);
+      expect(cache.set).not.toHaveBeenCalled();
     });
   });
 
