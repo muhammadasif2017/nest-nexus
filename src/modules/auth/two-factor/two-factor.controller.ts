@@ -89,6 +89,9 @@ export class TwoFactorController {
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ): Promise<AuthOutput> {
+    if (user.scope !== 'two_factor_pending') {
+      throw new UnauthorizedException('Invalid token scope.');
+    }
     const isValid = await this.twoFactorService.verify(user.sub, dto.code);
     if (!isValid) throw new UnauthorizedException('Invalid 2FA code.');
 
