@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Patch,
-  Delete,
-  Param,
-  Body,
-  UseGuards,
-  NotFoundException,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { UserOutput } from './dto/user.output';
@@ -59,13 +50,8 @@ export class UsersController {
   @ApiResponse({ status: 200, description: 'User found.', type: UserOutput })
   @ApiResponse({ status: 401, description: 'Not authenticated.' })
   @ApiResponse({ status: 404, description: 'User not found.' })
-  async findOne(@Param('id') id: string): Promise<UserOutput | null> {
-    try {
-      return await this.usersService.findById(id);
-    } catch (e) {
-      if (e instanceof NotFoundException) return null;
-      throw e;
-    }
+  async findOne(@Param('id') id: string): Promise<UserOutput> {
+    return this.usersService.findById(id);
   }
 
   // ── Authenticated: Update own profile ─────────────────────────────────────
