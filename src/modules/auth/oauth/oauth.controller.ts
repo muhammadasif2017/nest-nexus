@@ -1,5 +1,4 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -7,6 +6,14 @@ import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
 import { Public } from '../../../common/decorators/public.decorator';
 import { OAuthProfile } from './strategies/google.strategy';
+import {
+  GoogleOAuthInitGuard,
+  GithubOAuthInitGuard,
+  MicrosoftOAuthInitGuard,
+  GoogleOAuthCallbackGuard,
+  GithubOAuthCallbackGuard,
+  MicrosoftOAuthCallbackGuard,
+} from '../../../common/guards/oauth-csrf.guard';
 
 @ApiTags('auth')
 @Controller('auth')
@@ -21,7 +28,7 @@ export class OAuthController {
 
   @Get('google')
   @Public()
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleOAuthInitGuard)
   @ApiOperation({ summary: 'Initiate Google OAuth2 flow' })
   googleAuth() {
     // Passport redirects to Google automatically — no body needed
@@ -29,7 +36,7 @@ export class OAuthController {
 
   @Get('google/callback')
   @Public()
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleOAuthCallbackGuard)
   @ApiOperation({ summary: 'Google OAuth2 callback' })
   async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.handleOAuthCallback(req, res);
@@ -39,13 +46,13 @@ export class OAuthController {
 
   @Get('github')
   @Public()
-  @UseGuards(AuthGuard('github'))
+  @UseGuards(GithubOAuthInitGuard)
   @ApiOperation({ summary: 'Initiate GitHub OAuth2 flow' })
   githubAuth() {}
 
   @Get('github/callback')
   @Public()
-  @UseGuards(AuthGuard('github'))
+  @UseGuards(GithubOAuthCallbackGuard)
   @ApiOperation({ summary: 'GitHub OAuth2 callback' })
   async githubCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.handleOAuthCallback(req, res);
@@ -55,13 +62,13 @@ export class OAuthController {
 
   @Get('microsoft')
   @Public()
-  @UseGuards(AuthGuard('microsoft'))
+  @UseGuards(MicrosoftOAuthInitGuard)
   @ApiOperation({ summary: 'Initiate Microsoft OAuth2 flow' })
   microsoftAuth() {}
 
   @Get('microsoft/callback')
   @Public()
-  @UseGuards(AuthGuard('microsoft'))
+  @UseGuards(MicrosoftOAuthCallbackGuard)
   @ApiOperation({ summary: 'Microsoft OAuth2 callback' })
   async microsoftCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     return this.handleOAuthCallback(req, res);
