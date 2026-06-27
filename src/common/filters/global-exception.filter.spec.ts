@@ -161,18 +161,18 @@ describe('GlobalExceptionFilter', () => {
       expect(body.errorCode).toBe(ErrorCode.RATE_LIMITED);
     });
 
-    it('maps PrismaClientKnownRequestError P2002 → 409 CONFLICT with field name', () => {
+    it('maps PrismaClientKnownRequestError P2002 → 409 CONFLICT with generic message', () => {
       const err = makePrismaError('P2002', { target: ['email'] });
       const body = catch_(err);
       expect(body.statusCode).toBe(409);
       expect(body.errorCode).toBe(ErrorCode.CONFLICT);
-      expect(body.message).toContain('email');
+      expect(body.message).toBe('A record with this value already exists.');
     });
 
-    it('maps PrismaClientKnownRequestError P2002 with no target → uses "field" fallback', () => {
+    it('maps PrismaClientKnownRequestError P2002 with no target → same generic message', () => {
       const err = makePrismaError('P2002', {});
       const body = catch_(err);
-      expect(body.message).toContain('field');
+      expect(body.message).toBe('A record with this value already exists.');
     });
 
     it('maps PrismaClientKnownRequestError P2025 → 404 NOT_FOUND', () => {

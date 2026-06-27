@@ -244,11 +244,12 @@ describe('AuthService', () => {
       await expect(service.login(dto)).rejects.toThrow('Invalid email or password.');
     });
 
-    it('throws ForbiddenException for deactivated account', async () => {
+    it('throws UnauthorizedException for deactivated account without disclosing reason', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUserDoc({ isActive: false }));
       bcryptCompare.mockResolvedValue(true);
-      await expect(service.login(dto)).rejects.toThrow(ForbiddenException);
+      await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
+      await expect(service.login(dto)).rejects.toThrow('Invalid email or password.');
     });
 
     it('returns auth output on success', async () => {
