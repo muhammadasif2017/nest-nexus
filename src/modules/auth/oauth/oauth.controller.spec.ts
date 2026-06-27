@@ -56,7 +56,7 @@ describe('OAuthController', () => {
   beforeEach(() => jest.clearAllMocks());
 
   describe('googleCallback()', () => {
-    it('sets the refresh cookie and redirects with the access token fragment', async () => {
+    it('sets the refresh cookie and redirects to oauth success without token', async () => {
       const { controller, authService, config } = makeController();
       const req = makeReq();
       const res = makeRes();
@@ -64,23 +64,19 @@ describe('OAuthController', () => {
       expect(authService.oauthLogin).toHaveBeenCalledWith(req.user, 'test-agent');
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(config.get).toHaveBeenCalledWith('app.clientOrigin');
-      expect(res.redirect).toHaveBeenCalledWith(
-        'http://localhost:3000/oauth/success#token=access-token',
-      );
+      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3000/oauth/success');
     });
   });
 
   describe('githubCallback()', () => {
-    it('sets the refresh cookie and redirects with the access token fragment', async () => {
+    it('sets the refresh cookie and redirects to oauth success without token', async () => {
       const { controller, authService } = makeController();
       const req = makeReq();
       const res = makeRes();
       await controller.githubCallback(req as any, res as any);
       expect(authService.oauthLogin).toHaveBeenCalledWith(req.user, 'test-agent');
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
-      expect(res.redirect).toHaveBeenCalledWith(
-        'http://localhost:3000/oauth/success#token=access-token',
-      );
+      expect(res.redirect).toHaveBeenCalledWith('http://localhost:3000/oauth/success');
     });
   });
 });
