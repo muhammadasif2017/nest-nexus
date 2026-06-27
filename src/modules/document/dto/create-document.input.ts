@@ -13,6 +13,7 @@ export class CreateDocumentInput {
   @ApiProperty({ example: 'Body text…' })
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100_000)
   body!: string;
 
   @ApiProperty({ enum: VISIBILITIES, required: false, default: 'private' })
