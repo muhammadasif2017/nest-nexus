@@ -14,9 +14,9 @@ export class AuthOutput {
   // HttpOnly refresh cookie silently reissues this token on page reload.
   accessToken!: string;
 
-  @ApiProperty({ type: () => UserOutput })
+  @ApiProperty({ type: () => UserOutput, required: false })
   @Expose()
-  user!: UserOutput;
+  user?: UserOutput;
 
   @ApiProperty({ description: 'ISO timestamp when the access token expires.' })
   @Expose()

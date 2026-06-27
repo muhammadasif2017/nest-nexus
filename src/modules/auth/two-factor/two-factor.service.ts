@@ -115,8 +115,8 @@ export class TwoFactorService {
 
   private generateBackupCodes(): string[] {
     return Array.from({ length: 10 }, () => {
-      const hex = crypto.randomBytes(4).toString('hex').toUpperCase();
-      return `${hex.slice(0, 4)}-${hex.slice(4)}`;
+      const hex = crypto.randomBytes(8).toString('hex').toUpperCase();
+      return `${hex.slice(0, 4)}-${hex.slice(4, 8)}-${hex.slice(8, 12)}-${hex.slice(12)}`;
     });
   }
 

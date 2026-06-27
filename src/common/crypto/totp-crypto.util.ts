@@ -25,7 +25,12 @@ export function encryptTotpSecret(secret: string, keyHex: string): string {
  * so that legacy plaintext secrets continue to work until users re-enroll.
  */
 export function decryptTotpSecret(stored: string, keyHex: string): string {
-  if (!stored.startsWith(ENC_PREFIX)) return stored;
+  if (!stored.startsWith(ENC_PREFIX)) {
+    // Plaintext TOTP secret in DB — exposed in a breach it allows indefinite code generation.
+    // Run the migration script to re-encrypt all plaintext secrets.
+    console.warn('[totp-crypto] plaintext TOTP secret detected — re-encryption required');
+    return stored;
+  }
   const buf = Buffer.from(stored.slice(ENC_PREFIX.length), 'base64');
   const iv = buf.subarray(0, IV_BYTES);
   const tag = buf.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);

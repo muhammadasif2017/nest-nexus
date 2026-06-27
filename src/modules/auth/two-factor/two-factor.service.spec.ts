@@ -187,12 +187,12 @@ describe('TwoFactorService', () => {
       expect(codes).toHaveLength(10);
     });
 
-    it('backup codes match XXXX-XXXX hex format', async () => {
+    it('backup codes match XXXX-XXXX-XXXX-XXXX hex format', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
       mockAuthenticator.verify.mockReturnValue(true);
       const codes = await service.enable('user-id', '123456');
-      codes.forEach((c) => expect(c).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/));
+      codes.forEach((c) => expect(c).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/));
     });
 
     it('sets isTwoFactorEnabled to true in DB', async () => {

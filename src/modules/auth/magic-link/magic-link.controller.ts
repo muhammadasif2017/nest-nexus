@@ -36,6 +36,7 @@ export class MagicLinkController {
 
   @Get('verify')
   @Public()
+  @Throttle({ strict: { limit: 10, ttl: 600_000 } })
   @ApiOperation({
     summary: 'Verify magic link token',
     description:

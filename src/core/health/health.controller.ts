@@ -6,6 +6,7 @@ import {
   DiskHealthIndicator,
 } from '@nestjs/terminus';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 import { PrismaHealthIndicator } from './prisma.health';
 import { RedisHealthIndicator } from './redis.health';
 
@@ -20,16 +21,20 @@ export class HealthController {
     private readonly disk: DiskHealthIndicator,
   ) {}
 
-  // Kubernetes liveness probe — process is alive and not deadlocked
+  // Kubernetes liveness probe — just verifies the process can respond.
+  // Memory OOM is handled by the container runtime; heap threshold checks here
+  // would kill the pod on transient GC pressure.
   @Get('live')
+  @Public()
   @HealthCheck()
-  @ApiOperation({ summary: 'Liveness probe (memory only)' })
+  @ApiOperation({ summary: 'Liveness probe (process alive)' })
   live() {
-    return this.health.check([() => this.memory.checkHeap('memory_heap', 300 * 1024 * 1024)]);
+    return this.health.check([]);
   }
 
   // Kubernetes readiness probe — app can serve traffic (db + cache reachable)
   @Get('ready')
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Readiness probe (db + redis)' })
   ready() {
@@ -41,6 +46,7 @@ export class HealthController {
 
   // Deep health check — all dependencies including disk
   @Get('deep')
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Deep health check (all dependencies)' })
   deep() {

@@ -8,6 +8,8 @@ import { getRequestFromContext } from '../utils/execution-context.util';
 // ReBAC layer. Requires the user to hold the @RequireRelation relation (or a
 // stronger one, via implication) on the resource named by the :id route param.
 // super_admin bypasses. Single-resource routes only (needs :id).
+// WARNING: throws 403 on failure — do NOT apply to read routes where the
+// no-enumeration policy requires 404. Handle read access in the service layer.
 @Injectable()
 export class RelationGuard implements CanActivate {
   constructor(

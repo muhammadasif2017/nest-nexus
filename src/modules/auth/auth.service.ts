@@ -114,7 +114,7 @@ export class AuthService {
     await this.cache.del(failKey);
 
     if (!user.isActive) {
-      throw new ForbiddenException('Your account has been deactivated. Please contact support.');
+      throw new UnauthorizedException('Invalid email or password.');
     }
 
     this.prisma.user

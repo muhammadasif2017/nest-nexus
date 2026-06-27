@@ -47,17 +47,10 @@ describe('UsersController', () => {
       expect(result).toEqual({ id: 'user-2' });
     });
 
-    it('returns null when the user is not found', async () => {
+    it('propagates NotFoundException when the user is not found', async () => {
       const { controller, service } = makeController();
       service.findById.mockRejectedValue(new NotFoundException());
-      const result = await controller.findOne('missing');
-      expect(result).toBeNull();
-    });
-
-    it('re-throws non-NotFound errors', async () => {
-      const { controller, service } = makeController();
-      service.findById.mockRejectedValue(new Error('DB down'));
-      await expect(controller.findOne('x')).rejects.toThrow('DB down');
+      await expect(controller.findOne('missing')).rejects.toThrow(NotFoundException);
     });
   });
 
