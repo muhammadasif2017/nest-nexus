@@ -55,7 +55,11 @@ export class CacheInvalidationService implements OnModuleInit, OnModuleDestroy {
 
   private async invalidate(keys: string[]): Promise<void> {
     await Promise.all(keys.map((k) => this.cache.del(k)));
-    await this.publisher.publish(CHANNEL, JSON.stringify({ keys }));
+    try {
+      await this.publisher.publish(CHANNEL, JSON.stringify({ keys }));
+    } catch (err) {
+      this.logger.warn({ err }, 'Redis publish failed — cross-instance invalidation skipped');
+    }
   }
 
   @OnEvent('user.created')

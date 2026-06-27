@@ -120,6 +120,21 @@ describe('CacheInvalidationService', () => {
     });
   });
 
+  describe('invalidate() — Redis publish failure', () => {
+    it('does not throw when publisher.publish rejects', async () => {
+      const { service, publisher } = makeService();
+      publisher.publish.mockRejectedValue(new Error('Redis connection lost'));
+      await expect(service.onUserCreated()).resolves.not.toThrow();
+    });
+
+    it('still invalidates local cache when publisher.publish rejects', async () => {
+      const { service, cache, publisher } = makeService();
+      publisher.publish.mockRejectedValue(new Error('Redis connection lost'));
+      await service.onUserCreated();
+      expect(cache.del).toHaveBeenCalledWith('users:all');
+    });
+  });
+
   describe('onUserUpdated()', () => {
     it('invalidates both the user-specific and users:all keys', async () => {
       const { service, cache } = makeService();
