@@ -1,4 +1,9 @@
-import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  InternalServerErrorException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PolicyGuard } from './policy.guard';
 import { AuthorizationService } from '../../modules/authorization/authorization.service';
@@ -63,5 +68,12 @@ describe('PolicyGuard', () => {
     await expect(
       build('document.read').canActivate(httpContext({ sub: 'u2', roles: ['user'] }, 'd1')),
     ).rejects.toThrow(NotFoundException);
+  });
+
+  it('throws InternalServerError for unsupported resource type in policy name', async () => {
+    await expect(
+      build('report.read').canActivate(httpContext({ sub: 'u1', roles: ['user'] }, 'r1')),
+    ).rejects.toThrow(InternalServerErrorException);
+    expect(prisma.document.findUnique).not.toHaveBeenCalled();
   });
 });
