@@ -110,6 +110,7 @@ export class DocumentController {
   // ReBAC management: only the owner can share (grant a relation to another user).
   @Post(':id/share')
   @HttpCode(204)
+  @RequirePermission(Permission.DOCUMENT_WRITE)
   @RequireRelation(Relation.OWNER, 'document')
   @ApiOperation({ summary: 'Share a document — grant a relation (owner only)' })
   @ApiResponse({ status: 204, description: 'Relation granted.' })
@@ -119,6 +120,7 @@ export class DocumentController {
 
   @Delete(':id/share')
   @HttpCode(204)
+  @RequirePermission(Permission.DOCUMENT_WRITE)
   @RequireRelation(Relation.OWNER, 'document')
   @ApiOperation({ summary: 'Unshare a document — revoke a relation (owner only)' })
   @ApiResponse({ status: 204, description: 'Relation revoked.' })
