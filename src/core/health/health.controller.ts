@@ -6,6 +6,7 @@ import {
   DiskHealthIndicator,
 } from '@nestjs/terminus';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 import { PrismaHealthIndicator } from './prisma.health';
 import { RedisHealthIndicator } from './redis.health';
 
@@ -22,6 +23,7 @@ export class HealthController {
 
   // Kubernetes liveness probe — process is alive and not deadlocked
   @Get('live')
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Liveness probe (memory only)' })
   live() {
@@ -30,6 +32,7 @@ export class HealthController {
 
   // Kubernetes readiness probe — app can serve traffic (db + cache reachable)
   @Get('ready')
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Readiness probe (db + redis)' })
   ready() {
@@ -41,6 +44,7 @@ export class HealthController {
 
   // Deep health check — all dependencies including disk
   @Get('deep')
+  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Deep health check (all dependencies)' })
   deep() {
