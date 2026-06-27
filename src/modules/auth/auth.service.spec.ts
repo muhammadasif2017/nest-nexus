@@ -306,7 +306,11 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(makeUserDoc());
       bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
-      expect(cache.set).toHaveBeenCalledWith('login:fail:user@test.com', 4, expect.any(Number));
+      expect(cache.set).toHaveBeenCalledWith(
+        'login:fail:unknown:user@test.com',
+        4,
+        expect.any(Number),
+      );
     });
 
     it('increments failure counter when email not found', async () => {
@@ -315,7 +319,11 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(null);
       bcryptCompare.mockResolvedValue(false);
       await expect(service.login(dto)).rejects.toThrow(UnauthorizedException);
-      expect(cache.set).toHaveBeenCalledWith('login:fail:user@test.com', 1, expect.any(Number));
+      expect(cache.set).toHaveBeenCalledWith(
+        'login:fail:unknown:user@test.com',
+        1,
+        expect.any(Number),
+      );
     });
 
     it('clears failure counter on successful login', async () => {
@@ -324,7 +332,7 @@ describe('AuthService', () => {
       prisma.user.findUnique.mockResolvedValue(makeUserDoc());
       bcryptCompare.mockResolvedValue(true);
       await service.login(dto);
-      expect(cache.del).toHaveBeenCalledWith('login:fail:user@test.com');
+      expect(cache.del).toHaveBeenCalledWith('login:fail:unknown:user@test.com');
     });
 
     it('does not increment counter on successful login', async () => {

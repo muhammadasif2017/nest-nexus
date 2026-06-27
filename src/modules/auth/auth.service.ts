@@ -42,7 +42,7 @@ type UserForAuth = Pick<
 
 const LOGIN_MAX_FAILURES = 10;
 const LOGIN_LOCKOUT_TTL_MS = 15 * 60 * 1000;
-const loginFailKey = (email: string) => `login:fail:${email}`;
+const loginFailKey = (ip: string, email: string) => `login:fail:${ip}:${email}`;
 
 @Injectable()
 export class AuthService {
@@ -88,7 +88,7 @@ export class AuthService {
     userAgent?: string,
   ): Promise<{ auth: AuthOutput; refreshToken: string }> {
     const email = dto.email.toLowerCase();
-    const failKey = loginFailKey(email);
+    const failKey = loginFailKey(ipAddress ?? 'unknown', email);
 
     const failCount = Number(await this.cache.get(failKey)) || 0;
     if (failCount >= LOGIN_MAX_FAILURES) {
