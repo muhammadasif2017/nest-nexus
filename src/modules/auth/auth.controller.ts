@@ -86,7 +86,9 @@ export class AuthController {
       req.ip,
       req.headers['user-agent'],
     );
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
+    if (refreshToken) {
+      res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
+    }
     return auth;
   }
 
