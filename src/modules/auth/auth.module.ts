@@ -13,6 +13,14 @@ import { OAuthController } from './oauth/oauth.controller';
 import { GoogleStrategy } from './oauth/strategies/google.strategy';
 import { GithubStrategy } from './oauth/strategies/github.strategy';
 import { MicrosoftStrategy } from './oauth/strategies/microsoft.strategy';
+import {
+  GoogleOAuthInitGuard,
+  GithubOAuthInitGuard,
+  MicrosoftOAuthInitGuard,
+  GoogleOAuthCallbackGuard,
+  GithubOAuthCallbackGuard,
+  MicrosoftOAuthCallbackGuard,
+} from '../../common/guards/oauth-csrf.guard';
 
 import { TwoFactorController } from './two-factor/two-factor.controller';
 import { TwoFactorService } from './two-factor/two-factor.service';
@@ -53,6 +61,12 @@ import { QueuesModule } from '../../core/queues/queues.module';
     GoogleStrategy,
     GithubStrategy,
     MicrosoftStrategy,
+    GoogleOAuthInitGuard,
+    GithubOAuthInitGuard,
+    MicrosoftOAuthInitGuard,
+    GoogleOAuthCallbackGuard,
+    GithubOAuthCallbackGuard,
+    MicrosoftOAuthCallbackGuard,
   ],
   controllers: [
     AuthController,
