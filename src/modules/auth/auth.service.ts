@@ -1,11 +1,16 @@
 import {
   Injectable,
+  Inject,
+  HttpException,
+  HttpStatus,
   UnauthorizedException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import * as bcrypt from 'bcrypt';
 import { plainToInstance } from 'class-transformer';
 import { PrismaService } from '../../core/prisma/prisma.service';
@@ -35,6 +40,10 @@ type UserForAuth = Pick<
   | 'isTwoFactorEnabled'
 >;
 
+const LOGIN_MAX_FAILURES = 10;
+const LOGIN_LOCKOUT_TTL_MS = 15 * 60 * 1000;
+const loginFailKey = (ip: string, email: string) => `login:fail:${ip}:${email}`;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -44,6 +53,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    @Inject(CACHE_MANAGER) private readonly cache: Cache,
   ) {}
 
   async register(
@@ -77,9 +87,18 @@ export class AuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<{ auth: AuthOutput; refreshToken: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase() },
-    });
+    const email = dto.email.toLowerCase();
+    const failKey = loginFailKey(ipAddress ?? 'unknown', email);
+
+    const failCount = Number(await this.cache.get(failKey)) || 0;
+    if (failCount >= LOGIN_MAX_FAILURES) {
+      throw new HttpException(
+        'Account temporarily locked due to too many failed login attempts. Please try again in 15 minutes.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({ where: { email } });
 
     // Must be a valid 60-char bcrypt hash so compare() runs the full KDF work factor,
     // preventing timing attacks that reveal whether the email exists.
@@ -88,8 +107,11 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(dto.password, passwordHash);
 
     if (!user || !isPasswordValid) {
+      await this.cache.set(failKey, failCount + 1, LOGIN_LOCKOUT_TTL_MS);
       throw new UnauthorizedException('Invalid email or password.');
     }
+
+    await this.cache.del(failKey);
 
     if (!user.isActive) {
       throw new ForbiddenException('Your account has been deactivated. Please contact support.');
