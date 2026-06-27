@@ -15,6 +15,7 @@ import { TokenService } from '../token.service';
 import { TwoFactorService } from './two-factor.service';
 import { AuthOutput } from '../dto/auth.output';
 import { TwoFactorCodeInput } from './dto/two-factor-code.input';
+import { Throttle } from '@nestjs/throttler';
 import { AllowPending2FA } from '../../../common/decorators/allow-pending-2fa.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { JwtPayload } from '../strategies/jwt.strategy';
@@ -70,6 +71,7 @@ export class TwoFactorController {
   }
 
   @Post('verify')
+  @Throttle({ strict: { limit: 3, ttl: 600_000 } })
   @AllowPending2FA()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
