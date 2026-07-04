@@ -1,20 +1,10 @@
 # Nexus
 
-> What does it take to support five authentication methods in one NestJS backend — OAuth, 2FA, passkeys, magic links, and API keys? I built them to find out.
+NestJS backend implementing five authentication methods side by side: OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, and API keys. A JWT core with refresh-token rotation and family-based reuse detection sits underneath all of them.
 
-Most backends ship one auth flow and call it done. Nexus implements five —
-OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, and API keys — alongside a
-hardened JWT core with refresh-token rotation and family-based reuse detection.
+It runs on real infrastructure, not a stub. Postgres/Prisma, Redis, BullMQ with dead-letter handling. The auth flows get exercised against the same production-shaped concerns (connection pooling, queue backpressure, cache invalidation) a real service deals with, instead of a toy harness.
 
-The auth lives in a realistic setting: Postgres/Prisma, Redis, BullMQ queues
-with dead-letter handling — the infrastructure a real service runs on, so the auth
-flows are tested against production-shaped concerns rather than a toy harness.
-
-This is a reference implementation, not a clone-and-start template — there is
-deliberately no business domain, because the subject *is* authentication. The
-API surface is REST, documented with OpenAPI/Swagger.
-
----
+No business domain, on purpose — the subject is authentication, so there's nothing else competing for attention. API surface is REST, documented with OpenAPI/Swagger.
 
 ## What's Inside
 
@@ -34,8 +24,6 @@ API surface is REST, documented with OpenAPI/Swagger.
 | **Health** | Terminus | Kubernetes-ready liveness/readiness probes |
 | **Logging** | Pino | Structured JSON logs with redaction |
 | **Containers** | Docker + Compose | Full local stack in one command |
-
----
 
 ## Quick Start
 
@@ -104,8 +92,6 @@ open http://localhost:3000/api/docs
 open http://localhost:3000/admin/queues
 ```
 
----
-
 ## Project Structure
 
 ```
@@ -153,23 +139,20 @@ prisma/
 └── migrations/                      # Auto-generated SQL migrations (committed to version control)
 ```
 
----
-
 ## Architecture Decisions
 
-### Security is layered, not bolted on
+### Six security layers, one job each
 
-Every incoming request passes through six security layers before reaching application code:
-CORS → Helmet → Compression → Cookie Parser → Rate Limiting → Guards.
-Each layer has a single, non-overlapping responsibility. Removing one degrades security
-in exactly one dimension, which makes the tradeoffs explicit.
+Every incoming request passes through: CORS → Helmet → Compression → Cookie Parser →
+Rate Limiting → Guards. Each layer owns exactly one responsibility. Pull one out and
+exactly one dimension of security degrades — the tradeoff is explicit, not hidden.
 
 ### Authentication is JWT-first
 
-Stateless Bearer tokens + HttpOnly refresh cookie serve API clients — mobile apps, SPAs,
+Stateless Bearer tokens + HttpOnly refresh cookie serve API clients: mobile apps, SPAs,
 third-party integrations. OAuth2 callbacks, 2FA, magic links, WebAuthn, and API keys all
-converge on the same JWT issuance path so guards and decorators read from one consistent
-`req.user` object.
+converge on the same JWT issuance path, so guards and decorators read from one
+`req.user` object regardless of how the user authenticated.
 
 ### Authorization is four techniques behind one decision point
 
@@ -186,10 +169,9 @@ ADR-029.
 ### Refresh token rotation with reuse detection
 
 Every successful refresh issues a new refresh token and invalidates the old one. If an
-already-used token is presented — the signature of a stolen token being replayed — the
-entire token *family* is immediately revoked, forcing a full re-login. The family concept
-means a single stolen token can't silently persist access; the moment it's used, the
-legitimate user's next refresh triggers full revocation.
+already-used token shows up again (the signature of a stolen token being replayed), the
+entire token *family* is revoked immediately, forcing a full re-login. A single stolen
+token can't quietly persist access — the moment it's replayed, the family dies.
 
 Tokens are stored as bcrypt hashes (cost 8) in a dedicated `RefreshToken` table with a
 FK to `User`. Cost 8 (vs 12 for passwords) is intentional: cryptographically random tokens
@@ -228,13 +210,11 @@ in horizontally scaled deployments.
 
 ### BullMQ jobs have a two-layer failure strategy
 
-Layer 1 is automatic retry with exponential backoff — handles transient failures (network
-blips, momentary Redis timeouts). Layer 2 is the dead-letter store — on final failure,
-the job is persisted, classified by error type (transient, permanent, external),
-and an alert is fired for critical queues. Operators can inspect, acknowledge, and replay
-dead-letter jobs without touching the database directly.
-
----
+Layer 1 is automatic retry with exponential backoff, handling transient failures like
+network blips or momentary Redis timeouts. Layer 2 is the dead-letter store: on final
+failure the job gets persisted, classified by error type (transient, permanent, external),
+and an alert fires for critical queues. From there operators can inspect the job, acknowledge
+it, or replay it, all without touching the database directly.
 
 ## Authentication Flows
 
@@ -284,8 +264,6 @@ On login (2FA enabled):
   → POST /api/v1/auth/2fa/verify → code valid → issue full auth tokens
 ```
 
----
-
 ## Queue Architecture
 
 ### Job lifecycle
@@ -310,8 +288,6 @@ email-verification, 2FA-code, and magic-link messages.
 |---|---|---|
 | `email` | 5 | Welcome, password reset, email verification, 2FA code, magic link |
 
----
-
 ## Observability
 
 ### Endpoints
@@ -321,8 +297,6 @@ email-verification, 2FA-code, and magic-link messages.
 | `GET /api/v1/health/live` | Is the process alive and not OOM? | Liveness probe |
 | `GET /api/v1/health/ready` | Are all dependencies reachable? | Readiness probe |
 | `GET /api/v1/health/deep` | Full dependency diagnostics | Manual inspection |
-
----
 
 ## Environment Variables
 
@@ -343,8 +317,6 @@ MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET # Enables Microsoft OAuth
 ALERTS_WEBHOOK_URL                         # Enables Slack/webhook job failure alerts
 ```
 
----
-
 ## Scripts
 
 ```bash
@@ -363,8 +335,6 @@ npx prisma migrate deploy       # Apply pending migrations (CI / production)
 npx prisma studio               # Browse and edit data in the browser
 npx prisma generate             # Regenerate the Prisma client after schema changes
 ```
-
----
 
 ## Docker Commands
 
@@ -388,15 +358,13 @@ docker-compose down -v
 docker build --target production -t nexus:latest .
 ```
 
----
-
 ## Extending the Project
 
-Nexus isn't a template to clone — but the extension points are documented here
-because building each seam cleanly was part of the exercise, and because a
-reader (or future me) should be able to see how a new module, queue, or OAuth
-provider slots in. The feature-module steps below use a hypothetical `orders`
-module purely to illustrate the pattern; no business domain actually exists.
+These are extension points, not features actually built into the repo. Documenting
+them was part of the exercise itself — a reader (or future me) should be able to see
+how a new module, queue, or OAuth provider slots in without guessing. The
+feature-module steps below use a hypothetical `orders` module to show the pattern;
+no such module exists in the codebase.
 
 ### Adding a new feature module
 
@@ -435,8 +403,6 @@ Follow the existing module pattern:
 4. Add the strategy to `AuthModule` providers
 5. Add initiation and callback routes to `oauth.controller.ts`
 
----
-
 ## Security Checklist
 
 Before deploying to production, verify:
@@ -450,12 +416,4 @@ Before deploying to production, verify:
 - [ ] Rate limiting thresholds are tuned for expected traffic patterns
 - [ ] `prisma migrate deploy` (not `migrate dev`) is used in production CI pipelines
 
----
-
-## License
-
-MIT — use it, extend it, ship it.
-
----
-
-<p align="center">Built across seven architectural phases · Annotated for understanding, not just copying</p>
+<p align="center">Built in seven phases, one architectural concern at a time.</p>
