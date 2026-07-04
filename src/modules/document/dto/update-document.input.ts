@@ -14,6 +14,7 @@ export class UpdateDocumentInput {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(100_000)
   body?: string;
 
   @ApiProperty({ enum: VISIBILITIES, required: false })
