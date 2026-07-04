@@ -10,6 +10,9 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+      bull-board:
+        patterns:
+          - '@bull-board/*'
 
   - package-ecosystem: 'github-actions'
     directory: '/'
