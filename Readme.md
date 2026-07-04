@@ -58,15 +58,9 @@ npm install
 cp .env.example .env
 ```
 
-Open `.env` and fill in the required values. The four you must set before anything works:
-
-```bash
-JWT_SECRET=         # 64-char random hex
-JWT_REFRESH_SECRET= # 64-char random hex (different from JWT_SECRET)
-DATABASE_URL=       # postgresql://user:password@localhost:5432/nest_nexus
-```
-
-Everything else has a safe default for local development.
+Open `.env` and set `JWT_SECRET`, `JWT_REFRESH_SECRET`, and `DATABASE_URL` — see
+[Environment Variables](#environment-variables) for the exact format. Everything
+else has a safe default for local development.
 
 ### 3. Start the infrastructure
 
