@@ -5,7 +5,7 @@ import {
   ConflictException,
   UnauthorizedException,
 } from '@nestjs/common';
-import { authenticator } from 'otplib';
+import { generateSecret, generateURI, verify as verifyTotp } from 'otplib';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
 import { ConfigService } from '@nestjs/config';
@@ -33,8 +33,8 @@ export class TwoFactorService {
     });
     if (!user) throw new NotFoundException('User not found.');
 
-    const secret = authenticator.generateSecret();
-    const otpauthUrl = authenticator.keyuri(user.email, 'Nexus', secret);
+    const secret = generateSecret();
+    const otpauthUrl = generateURI({ issuer: 'Nexus', label: user.email, secret });
     const qrCodeDataUrl = await QRCode.toDataURL(otpauthUrl);
 
     // Store secret temporarily — 2FA is not active until enable() is called
@@ -56,7 +56,7 @@ export class TwoFactorService {
     if (user.isTwoFactorEnabled) throw new ConflictException('2FA is already enabled.');
 
     const secret = decryptTotpSecret(user.twoFactorSecret, this.encryptionKey);
-    if (!authenticator.verify({ token: totpCode, secret })) {
+    if (!(await verifyTotp({ token: totpCode, secret })).valid) {
       throw new UnauthorizedException('Invalid TOTP code.');
     }
 
@@ -98,7 +98,7 @@ export class TwoFactorService {
     if (!user?.isTwoFactorEnabled || !user.twoFactorSecret) return false;
 
     const secret = decryptTotpSecret(user.twoFactorSecret, this.encryptionKey);
-    if (authenticator.verify({ token: code, secret })) return true;
+    if ((await verifyTotp({ token: code, secret })).valid) return true;
 
     // Try backup codes — strip formatting before hashing
     const hash = this.hashCode(userId, this.normalizeBackupCode(code));

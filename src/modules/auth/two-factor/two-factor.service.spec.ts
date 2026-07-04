@@ -12,11 +12,9 @@ import { PrismaService } from '../../../core/prisma/prisma.service';
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
 jest.mock('otplib', () => ({
-  authenticator: {
-    generateSecret: jest.fn().mockReturnValue('MOCK_TOTP_SECRET'),
-    keyuri: jest.fn().mockReturnValue('otpauth://totp/test'),
-    verify: jest.fn(),
-  },
+  generateSecret: jest.fn().mockReturnValue('MOCK_TOTP_SECRET'),
+  generateURI: jest.fn().mockReturnValue('otpauth://totp/test'),
+  verify: jest.fn(),
 }));
 
 jest.mock('qrcode', () => ({
@@ -29,10 +27,12 @@ jest.mock('../../../common/crypto/totp-crypto.util', () => ({
   decryptTotpSecret: jest.fn().mockReturnValue('MOCK_TOTP_SECRET'),
 }));
 
-import { authenticator } from 'otplib';
+import { generateSecret, generateURI, verify } from 'otplib';
 import { encryptTotpSecret, decryptTotpSecret } from '../../../common/crypto/totp-crypto.util';
 
-const mockAuthenticator = authenticator as jest.Mocked<typeof authenticator>;
+const mockGenerateSecret = generateSecret as jest.Mock;
+const mockGenerateURI = generateURI as jest.Mock;
+const mockVerify = verify as jest.Mock;
 const mockEncrypt = encryptTotpSecret as jest.Mock;
 const mockDecrypt = decryptTotpSecret as jest.Mock;
 
@@ -78,9 +78,9 @@ describe('TwoFactorService', () => {
     jest.clearAllMocks();
     mockEncrypt.mockReturnValue('enc:MOCK_ENCRYPTED');
     mockDecrypt.mockReturnValue('MOCK_TOTP_SECRET');
-    (mockAuthenticator.generateSecret as jest.Mock).mockReturnValue('MOCK_TOTP_SECRET');
-    (mockAuthenticator.keyuri as jest.Mock).mockReturnValue('otpauth://totp/test');
-    mockAuthenticator.verify.mockReturnValue(false);
+    mockGenerateSecret.mockReturnValue('MOCK_TOTP_SECRET');
+    mockGenerateURI.mockReturnValue('otpauth://totp/test');
+    mockVerify.mockResolvedValue({ valid: false });
   });
 
   // ── setup() ──────────────────────────────────────────────────────────────────
@@ -134,11 +134,11 @@ describe('TwoFactorService', () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue({ email: 'user@test.com' });
       await service.setup('user-id');
-      expect(mockAuthenticator.keyuri).toHaveBeenCalledWith(
-        'user@test.com',
-        'Nexus',
-        'MOCK_TOTP_SECRET',
-      );
+      expect(mockGenerateURI).toHaveBeenCalledWith({
+        issuer: 'Nexus',
+        label: 'user@test.com',
+        secret: 'MOCK_TOTP_SECRET',
+      });
     });
 
     it('qrCodeDataUrl starts with data:', async () => {
@@ -167,14 +167,14 @@ describe('TwoFactorService', () => {
     it('throws UnauthorizedException when TOTP code is invalid', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       await expect(service.enable('user-id', 'wrong')).rejects.toThrow(UnauthorizedException);
     });
 
     it('calls decryptTotpSecret before verifying TOTP', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       await service.enable('user-id', '123456');
       expect(mockDecrypt).toHaveBeenCalledWith('enc:MOCK_ENCRYPTED', TEST_KEY);
     });
@@ -182,7 +182,7 @@ describe('TwoFactorService', () => {
     it('returns 10 backup codes on success', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       const codes = await service.enable('user-id', '123456');
       expect(codes).toHaveLength(10);
     });
@@ -190,7 +190,7 @@ describe('TwoFactorService', () => {
     it('backup codes match XXXX-XXXX-XXXX-XXXX hex format', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       const codes = await service.enable('user-id', '123456');
       codes.forEach((c) => expect(c).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}$/));
     });
@@ -198,7 +198,7 @@ describe('TwoFactorService', () => {
     it('sets isTwoFactorEnabled to true in DB', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       await service.enable('user-id', '123456');
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -210,7 +210,7 @@ describe('TwoFactorService', () => {
     it('stores hashed backup codes (not plaintext) in DB', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       const codes = await service.enable('user-id', '123456');
       const { data } = prisma.user.update.mock.calls[0][0];
       // Hashed codes should not contain the raw hex codes
@@ -223,7 +223,7 @@ describe('TwoFactorService', () => {
     it('backup code hash is deterministic: stored hash matches what verify() looks for', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser());
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       const codes = await service.enable('user-id', '123456');
       const storedHash = (prisma.user.update.mock.calls[0][0] as any).data.twoFactorBackupCodes[0];
       // verify() strips dashes and uppercases before hashing — enable() must do the same
@@ -252,7 +252,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }))
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }));
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       await expect(service.disable('user-id', 'wrong')).rejects.toThrow(UnauthorizedException);
     });
 
@@ -261,7 +261,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }))
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }));
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       await service.disable('user-id', '123456');
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -276,7 +276,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }))
         .mockResolvedValueOnce(makeUser({ isTwoFactorEnabled: true }));
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       const result = await service.disable('user-id', '123456');
       expect(result).toBeUndefined();
     });
@@ -302,7 +302,7 @@ describe('TwoFactorService', () => {
     it('returns true for valid TOTP code', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser({ isTwoFactorEnabled: true }));
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       expect(await service.verify('user-id', '123456')).toBe(true);
     });
 
@@ -311,7 +311,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [] }),
       );
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       expect(await service.verify('user-id', 'wrong')).toBe(false);
     });
 
@@ -326,7 +326,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [hash] }),
       );
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       // Pass with dashes — service strips them
       expect(await service.verify('user-id', 'ABCD-1234')).toBe(true);
     });
@@ -343,7 +343,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [hash, otherHash] }),
       );
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       await service.verify('user-id', 'ABCD-1234');
       expect(prisma.user.update).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -360,7 +360,7 @@ describe('TwoFactorService', () => {
       prisma.user.findUnique.mockResolvedValue(
         makeUser({ isTwoFactorEnabled: true, twoFactorBackupCodes: [hash] }),
       );
-      mockAuthenticator.verify.mockReturnValue(false);
+      mockVerify.mockResolvedValue({ valid: false });
       // Service does .replace(/-/g, '').toUpperCase() before hashing
       expect(await service.verify('user-id', 'abcd-1234')).toBe(true);
     });
@@ -368,10 +368,10 @@ describe('TwoFactorService', () => {
     it('decrypts secret before calling authenticator.verify', async () => {
       const { service, prisma } = makeService();
       prisma.user.findUnique.mockResolvedValue(makeUser({ isTwoFactorEnabled: true }));
-      mockAuthenticator.verify.mockReturnValue(true);
+      mockVerify.mockResolvedValue({ valid: true, delta: 0 });
       await service.verify('user-id', '123456');
       expect(mockDecrypt).toHaveBeenCalledWith('enc:MOCK_ENCRYPTED', TEST_KEY);
-      expect(mockAuthenticator.verify).toHaveBeenCalledWith({
+      expect(mockVerify).toHaveBeenCalledWith({
         token: '123456',
         secret: 'MOCK_TOTP_SECRET',
       });
