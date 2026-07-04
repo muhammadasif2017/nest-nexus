@@ -25,7 +25,7 @@
     ]
   },
   "dependencies": {
-    "@bull-board/api": "^5.19.1",
+    "@bull-board/api": "^8.1.0",
     "@bull-board/express": "^5.19.1",
     "@keyv/redis": "^5.1.6",
     "@nestjs-modules/ioredis": "^2.0.2",
