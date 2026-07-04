@@ -98,7 +98,6 @@ async function bootstrap() {
     const bullBoardAdapter = new ExpressAdapter();
     bullBoardAdapter.setBasePath('/api/queues');
     createBullBoard({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       queues: [new BullMQAdapter(app.get<Queue>(getQueueToken(QUEUE_EMAIL))) as any],
       serverAdapter: bullBoardAdapter,
     });
