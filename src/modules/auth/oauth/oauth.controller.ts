@@ -75,12 +75,21 @@ export class OAuthController {
   }
 
   private async handleOAuthCallback(req: Request, res: Response): Promise<void> {
-    const { refreshToken } = await this.authService.oauthLogin(
+    const { auth, refreshToken } = await this.authService.oauthLogin(
       req.user as OAuthProfile,
       req.headers['user-agent'],
     );
-    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     const clientOrigin = this.config.get<string>('app.clientOrigin');
+
+    if (auth.isTwoFactorPending) {
+      // No refresh token yet — pending token travels in the fragment (never sent to
+      // the server, so it won't land in access/referrer logs). SPA reads it and calls
+      // POST /auth/2fa/verify.
+      res.redirect(`${clientOrigin}/oauth/2fa-pending#token=${auth.accessToken}`);
+      return;
+    }
+
+    res.cookie('refresh_token', refreshToken, this.tokenService.getRefreshTokenCookieOptions());
     // No token in the redirect URL — SPA calls POST /auth/refresh to obtain the access token
     // via the HttpOnly refresh_token cookie set above.
     res.redirect(`${clientOrigin}/oauth/success`);

@@ -16,6 +16,12 @@ const mockAuthOutput = {
   accessTokenExpiresAt: new Date(),
 };
 
+const mockPendingAuthOutput = {
+  accessToken: 'pending-token',
+  isTwoFactorPending: true,
+  accessTokenExpiresAt: new Date(),
+};
+
 const makeAuthServiceMock = () => ({
   oauthLogin: jest.fn().mockResolvedValue({ auth: mockAuthOutput, refreshToken: 'refresh-token' }),
 });
@@ -65,6 +71,24 @@ describe('OAuthController', () => {
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'refresh-token', cookieOptions);
       expect(config.get).toHaveBeenCalledWith('app.clientOrigin');
       expect(res.redirect).toHaveBeenCalledWith('http://localhost:3000/oauth/success');
+    });
+  });
+
+  describe('googleCallback() with 2FA pending', () => {
+    it('redirects with the pending token in the fragment and does not set a refresh cookie', async () => {
+      const { controller, authService, config } = makeController();
+      authService.oauthLogin.mockResolvedValue({
+        auth: mockPendingAuthOutput,
+        refreshToken: '',
+      });
+      const req = makeReq();
+      const res = makeRes();
+      await controller.googleCallback(req as any, res as any);
+      expect(res.cookie).not.toHaveBeenCalled();
+      expect(config.get).toHaveBeenCalledWith('app.clientOrigin');
+      expect(res.redirect).toHaveBeenCalledWith(
+        'http://localhost:3000/oauth/2fa-pending#token=pending-token',
+      );
     });
   });
 

@@ -63,6 +63,17 @@ describe('TwoFactorController', () => {
       scope: 'two_factor_pending',
     };
 
+    it('throws UnauthorizedException for a token that is not scope=two_factor_pending', async () => {
+      const { controller, twoFactorService, authService } = makeController();
+      const fullyAuthedUser: JwtPayload = { ...user, scope: undefined };
+      const res = makeRes();
+      await expect(
+        controller.verify(fullyAuthedUser, dto, makeReq() as any, res as any),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(twoFactorService.verify).not.toHaveBeenCalled();
+      expect(authService.issueTokens).not.toHaveBeenCalled();
+    });
+
     it('throws UnauthorizedException when the code is invalid', async () => {
       const { controller, twoFactorService } = makeController();
       twoFactorService.verify.mockResolvedValue(false);

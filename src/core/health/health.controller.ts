@@ -44,9 +44,9 @@ export class HealthController {
     ]);
   }
 
-  // Deep health check — all dependencies including disk
+  // Deep health check — all dependencies including disk. Not probed by Kubernetes
+  // (only live/ready are), so kept behind auth — no need to expose infra stats publicly.
   @Get('deep')
-  @Public()
   @HealthCheck()
   @ApiOperation({ summary: 'Deep health check (all dependencies)' })
   deep() {
