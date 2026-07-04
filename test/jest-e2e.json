@@ -6,6 +6,7 @@
   "transform": {
     "^.+\\.(t|j)s$": ["ts-jest", { "tsconfig": "./tsconfig.spec.json", "diagnostics": false }]
   },
+  "transformIgnorePatterns": ["node_modules/(?!(?:@otplib|otplib|@scure|@noble)/)"],
   "maxWorkers": 1,
   "testTimeout": 30000
 }
