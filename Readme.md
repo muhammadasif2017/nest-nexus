@@ -17,6 +17,8 @@ No business domain, on purpose — the subject is authentication, so there's not
 | **Authorization** | RBAC · Scopes · ABAC · ReBAC | Four techniques behind one decision point |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
 | **Passwordless** | Magic links | Email-based authentication |
+| **Passkeys** | WebAuthn | Passwordless login + passkey-only signup |
+| **M2M auth** | API keys | Machine-to-machine credentials via `X-API-Key` header |
 | **Cache** | Redis (ioredis) | Application cache + BullMQ backbone |
 | **Queues** | BullMQ | Background jobs, retries, dead-letter |
 | **Scheduler** | @nestjs/schedule | Cron jobs with distributed locking |
@@ -29,14 +31,14 @@ No business domain, on purpose — the subject is authentication, so there's not
 
 ### Prerequisites
 
-- Node.js 20+
+- Node.js 22+
 - Docker and Docker Compose
 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/your-org/nexus.git
-cd nexus
+git clone https://github.com/muhammadasif2017/nest-nexus.git
+cd nest-nexus
 npm install
 ```
 
@@ -88,8 +90,9 @@ curl http://localhost:3000/api/v1/health/ready
 # Swagger API docs
 open http://localhost:3000/api/docs
 
-# Queue dashboard
-open http://localhost:3000/admin/queues
+# Queue dashboard — requires an API key even in dev:
+# mint one via POST /api/v1/auth/api-keys, then send it in the X-API-Key header
+open http://localhost:3000/api/queues
 ```
 
 ## Project Structure
@@ -135,8 +138,10 @@ src/
 
 prisma/
 ├── schema.prisma                    # Models: User, RefreshToken, OauthProvider, WebauthnCredential, ApiKey, Document, RelationTuple
-├── prisma.config.ts                 # Prisma 7 runtime config (DATABASE_URL, migrations path)
+├── seed.ts                          # Seeds the first super_admin user
 └── migrations/                      # Auto-generated SQL migrations (committed to version control)
+
+prisma.config.ts                     # Prisma 7 runtime config (DATABASE_URL, migrations path) — repo root
 ```
 
 ## Architecture Decisions
@@ -165,6 +170,18 @@ AND. Object-level decisions a stacked guard can't express (read = `read:any` OR 
 visibility OR a `viewer` relation) live in `AuthorizationService.can()`. Denied reads
 return `404`, not `403`, so a caller can't enumerate which ids exist. See ADR-023 through
 ADR-029.
+
+The demo routes and the technique(s) gating each:
+
+| Route | Gated by |
+|---|---|
+| `POST /documents` | `document:write` scope |
+| `GET /documents` | `document:read` scope + DB-level readable filter (pagination over the readable subset) |
+| `GET /documents/:id` | scope, then `AuthorizationService.can()` — scope OR visibility OR relation; denied → `404` |
+| `GET /documents/:id/preview` | scope AND ABAC policy `document.read` |
+| `PATCH /documents/:id` | scope AND `editor` relation |
+| `DELETE /documents/:id` | scope AND `owner` relation |
+| `POST/DELETE /documents/:id/share` | scope AND `owner` relation (grants/revokes relation tuples) |
 
 ### Refresh token rotation with reuse detection
 
@@ -264,6 +281,45 @@ On login (2FA enabled):
   → POST /api/v1/auth/2fa/verify → code valid → issue full auth tokens
 ```
 
+### Magic Links
+
+```
+POST /api/v1/auth/magic-link/send   → always 200, even for unknown emails (no account enumeration)
+                                    → token: crypto.randomBytes(32), stored as SHA-256 hash, 15-min TTL
+                                    → email delivered via the `email` queue
+GET  /api/v1/auth/magic-link/verify?token=...
+                                    → hash matched → cleared immediately (single-use) → issues token pair
+```
+
+### WebAuthn / Passkeys
+
+```
+Add a passkey to an existing account (JWT required):
+POST /api/v1/auth/webauthn/register/options   → challenge stored in Redis (5-min TTL)
+POST /api/v1/auth/webauthn/register/verify    → upserts credential — one passkey per user, re-register replaces
+
+Passwordless login (@Public):
+POST /api/v1/auth/webauthn/login/options      → always 200, even for unknown emails (no enumeration)
+POST /api/v1/auth/webauthn/login/verify       → verifies assertion → issues token pair
+
+Passkey-only signup (@Public — no password ever exists):
+POST /api/v1/auth/webauthn/signup/options     → pending state in Redis; no User row created yet
+POST /api/v1/auth/webauthn/signup/verify      → creates user (password: null) + credential → issues token pair
+
+DELETE /api/v1/auth/webauthn/credential (JWT) → removes the passkey
+```
+
+### API Keys (machine-to-machine)
+
+```
+POST   /api/v1/auth/api-keys      (JWT) → user mints a key (many keys per user allowed)
+DELETE /api/v1/auth/api-keys/:id  (JWT) → revokes a key
+
+Usage: send the key in the X-API-Key header.
+  → ApiKeyGuard protects routes inside Nest's pipeline
+  → the same validation runs as Express middleware for non-Nest routes (Bull Board)
+```
+
 ## Queue Architecture
 
 ### Job lifecycle
@@ -345,9 +401,6 @@ docker-compose up -d
 # Start only infrastructure (run app locally for hot reload)
 docker-compose up -d postgres redis
 
-# Start with observability stack
-docker-compose --profile observability up -d
-
 # View logs for a specific service
 docker-compose logs -f app
 
@@ -355,7 +408,7 @@ docker-compose logs -f app
 docker-compose down -v
 
 # Build production image
-docker build --target production -t nexus:latest .
+docker build --target runtime -t nexus:latest .
 ```
 
 ## Extending the Project
@@ -388,20 +441,21 @@ Follow the existing module pattern:
 
 ### Adding a new queue
 
-1. Add the queue name constant to `src/queues/queues.constants.ts`
-2. Register it with `BullModule.registerQueue({ name: QUEUE_YOUR_QUEUE })` in `QueuesModule`
-3. Create a producer service in `queues/producers/`
-4. Create a processor extending `WorkerHost` in `queues/processors/`
+1. Add the queue name constant to `src/core/queues/queues.constants.ts`
+2. Register it with `BullModule.registerQueue({ name: QUEUE_YOUR_QUEUE })` in `QueuesModule` (`src/core/queues/queues.module.ts`)
+3. Define the job payload type in `src/core/queues/dto/`
+4. Create a processor extending `WorkerHost` in `src/core/queues/processors/`
 5. Add the `@OnWorkerEvent('failed')` hook pointing to `DeadLetterService`
-6. Add the queue to `QueueManagerService.getQueueMetrics()` for monitoring
+6. Register the queue in the Bull Board adapter in `main.ts` so it shows up on the dashboard
 
 ### Adding a new OAuth provider
 
 1. Install the Passport strategy: `npm install passport-<provider>`
-2. Create `src/modules/auth/strategies/<provider>.strategy.ts`
+2. Create `src/modules/auth/oauth/strategies/<provider>.strategy.ts`
 3. Add credentials to `oauth.config.ts` and `config.validation.ts`
-4. Add the strategy to `AuthModule` providers
-5. Add initiation and callback routes to `oauth.controller.ts`
+4. Add init + callback CSRF guards in `src/common/guards/oauth-csrf.guard.ts` (follow the Google/GitHub/Microsoft pattern)
+5. Add the strategy and guards to `AuthModule` providers
+6. Add initiation and callback routes to `oauth.controller.ts`
 
 ## Security Checklist
 
@@ -411,7 +465,7 @@ Before deploying to production, verify:
 - [ ] `NODE_ENV=production` is set (enables HTTPS-only cookies, strict CSP, removes Swagger UI and Bull Board)
 - [ ] PostgreSQL is not publicly accessible (firewall rules or VPC)
 - [ ] Redis is password-protected (`requirepass` in `redis.conf`)
-- [ ] `/admin/queues` (Bull Board) is behind IP allowlist or admin-only auth
+- [ ] `/api/queues` (Bull Board) is not reachable — it is mounted only when `NODE_ENV !== 'production'`, and is API-key gated even in dev
 - [ ] `ALERTS_WEBHOOK_URL` is configured so critical job failures page someone
 - [ ] Rate limiting thresholds are tuned for expected traffic patterns
 - [ ] `prisma migrate deploy` (not `migrate dev`) is used in production CI pipelines
