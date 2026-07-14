@@ -201,9 +201,10 @@ flowchart TD
 ### Authorization is four techniques behind one decision point
 
 Authentication answers *who you are*; authorization answers *what you may do*. The
-`document` resource demos four models side by side: **RBAC→Scopes** (roles expand to
-permission strings), **ABAC** (named policy predicates over resource attributes), and
-**ReBAC** (per-subject/per-object relationship tuples, Zanzibar-lite). Each is a guard
+`document` resource demos four techniques side by side: **RBAC** (role checks), **Scopes**
+(roles expand to permission strings via a single source-of-truth map), **ABAC** (named
+policy predicates over resource attributes), and **ReBAC** (per-subject/per-object
+relationship tuples, Zanzibar-lite). Each is a guard
 that no-ops unless its decorator is on the route, so stacked decorators read as logical
 AND. Object-level decisions a stacked guard can't express (read = `read:any` OR public
 visibility OR a `viewer` relation) live in `AuthorizationService.can()`. Denied reads
