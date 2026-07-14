@@ -27,6 +27,33 @@ No business domain, on purpose — the subject is authentication, so there's not
 | **Logging** | Pino | Structured JSON logs with redaction |
 | **Containers** | Docker + Compose | Full local stack in one command |
 
+### System overview
+
+```mermaid
+flowchart LR
+    Client["Client"] -->|"REST /api/v1"| Pipeline["Security pipeline<br/>CORS → Helmet → Compression →<br/>Cookie Parser → Rate Limit → Guards"]
+    Pipeline --> Features
+
+    subgraph Features["Feature modules (src/modules)"]
+        Auth["auth<br/>JWT · OAuth2 · 2FA · magic links · WebAuthn · API keys"]
+        Authz["authorization<br/>RBAC · Scopes · ABAC · ReBAC"]
+        Users["users"]
+        Docs["document (authz demo)"]
+    end
+
+    subgraph Core["Core infrastructure (src/core)"]
+        Prisma["PrismaService"]
+        Cache["Cache + invalidation"]
+        Queues["BullMQ + dead letter"]
+        Events["EventEmitter2"]
+    end
+
+    Features --> Core
+    Prisma --> PG[("PostgreSQL")]
+    Cache --> Redis[("Redis")]
+    Queues --> Redis
+```
+
 ## Quick Start
 
 ### Prerequisites
@@ -159,6 +186,18 @@ third-party integrations. OAuth2 callbacks, 2FA, magic links, WebAuthn, and API 
 converge on the same JWT issuance path, so guards and decorators read from one
 `req.user` object regardless of how the user authenticated.
 
+```mermaid
+flowchart TD
+    pw["Password login"] --> tfa{"2FA enabled?"}
+    tfa -->|"yes"| pending["Pending token<br/>scope: two_factor_pending"] --> verify["POST /auth/2fa/verify"] --> issue
+    tfa -->|"no"| issue
+    oauth["OAuth2 callback<br/>Google / GitHub / Microsoft"] --> issue
+    magic["Magic link verify"] --> issue
+    wa["WebAuthn login / signup verify"] --> issue["TokenService<br/>access token (15m) + HttpOnly refresh cookie (7d)"]
+    issue --> user["req.user — one shape for every guard"]
+    apikey["API key (X-API-Key header)"] -.->|"M2M — no JWT, own guard"| user
+```
+
 ### Authorization is four techniques behind one decision point
 
 Authentication answers *who you are*; authorization answers *what you may do*. The
@@ -183,6 +222,20 @@ The demo routes and the technique(s) gating each:
 | `DELETE /documents/:id` | scope AND `owner` relation |
 | `POST/DELETE /documents/:id/share` | scope AND `owner` relation (grants/revokes relation tuples) |
 
+```mermaid
+flowchart TD
+    req["Request hits a /documents route"] --> sa{"super_admin?"}
+    sa -->|"yes"| allow["ALLOW — short-circuits every check"]
+    sa -->|"no"| stack["Stacked guards — each no-ops without its decorator,<br/>stacked decorators = logical AND"]
+    stack --> perm{"PermissionsGuard<br/>@RequirePermission"}
+    perm -->|"scope missing"| forbid["403"]
+    perm -->|"pass / no-op"| rel{"RelationGuard<br/>@RequireRelation"}
+    rel -->|"no tuple (owner ⇒ editor ⇒ viewer)"| forbid
+    rel -->|"pass / no-op"| policy{"PolicyGuard<br/>@Policy"}
+    policy -->|"denied read"| nf["404 — indistinguishable from missing id"]
+    policy -->|"pass / no-op"| handler["Handler<br/>composed decisions via AuthorizationService.can()"]
+```
+
 ### Refresh token rotation with reuse detection
 
 Every successful refresh issues a new refresh token and invalidates the old one. If an
@@ -194,6 +247,25 @@ Tokens are stored as bcrypt hashes (cost 8) in a dedicated `RefreshToken` table 
 FK to `User`. Cost 8 (vs 12 for passwords) is intentional: cryptographically random tokens
 derive their brute-force resistance from entropy, not work factor — keeping rotation latency
 low while remaining storage-safe against database compromise.
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant T as TokenService
+    participant DB as RefreshToken table
+
+    C->>T: POST /auth/refresh (refresh_token cookie)
+    T->>T: 1. verify JWT signature
+    T->>DB: 2. find matching bcrypt hash (userId + family)
+    alt token was already used — replay of a stolen token
+        T->>DB: 3. revoke the entire token family
+        T-->>C: 401 — full re-login required
+    else token valid
+        T->>DB: 4. revoke old token (before issuing — order is deliberate)
+        T->>DB: 5. store new token hash
+        T-->>C: new access token + new HttpOnly refresh cookie
+    end
+```
 
 ### Guards read the request uniformly
 
