@@ -1,4 +1,4 @@
-# Nexus
+# Nest Nexus
 
 NestJS backend implementing five authentication methods side by side: OAuth2, TOTP 2FA, magic links, WebAuthn/passkeys, and API keys. A JWT core with refresh-token rotation and family-based reuse detection sits underneath all of them.
 
