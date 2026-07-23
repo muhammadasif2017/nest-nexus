@@ -77,41 +77,6 @@ to carry roles), so the token's `roles` claim is overridden per request — a ro
 change applies to live tokens within ~30s without a refresh. `setRoles()` emits
 `user.updated` to clear that cache. See ADR-029.
 
-## Authorization — four techniques, one decision point
-
-The `document` resource (`src/modules/document/`) is a demo exercising four authz
-techniques side by side. Everything routes through `AuthorizationService`
-(`src/modules/authorization/`). **`super_admin` short-circuits every check to ALLOW**
-and never consults the permission map.
-
-- **RBAC → Scopes**: roles expand to `Permission` strings via `ROLE_PERMISSIONS`
-  (`rbac/role-permissions.map.ts`) — the single source of truth for "what a kind of
-  user can do". `@RequirePermission(Permission.X)` + `PermissionsGuard` gate a route on
-  a scope. See ADR-023, ADR-024.
-- **ABAC**: `@Policy('document.read')` + `PolicyGuard` evaluate a named predicate
-  (`abac/policies.ts`) over user + resource attributes (e.g. `visibility`). See ADR-025.
-- **ReBAC**: `@RequireRelation(Relation.X)` + `RelationGuard` check a `RelationTuple`
-  for the relation (or a stronger one via implication: `owner ⇒ editor ⇒ viewer`).
-  Relation checks are **not cached** — a grant/revoke takes effect immediately, no event
-  to emit. See ADR-026.
-
-**Guard composition**: `DocumentController` applies all three guards class-wide. Each is
-a **no-op unless its decorator is present** on the route — so the decorators select which
-technique(s) gate that route, and **stacked decorators = logical AND**. All three guards
-load by `:id` (single-resource routes only).
-
-**`AuthorizationService.can()`** is for composed object-level decisions a stacked-AND
-guard cannot express (read = `read:any` scope OR ABAC visibility OR `viewer` relation).
-Feature services call it directly; route guards do not. List endpoints use
-`readableDocumentWhere()` — a DB-level Prisma `where` filter so pagination runs over the
-readable subset (never filter after `skip`/`take`).
-
-**No-enumeration**: a denied **read** returns `404`, identical to a missing resource, so
-a caller cannot probe which ids exist. Applies in both `PolicyGuard` and
-`DocumentService.findOne()`. Write/delete/share keep `403` (they passed a relation guard,
-so the id is already known to the caller). Error copy must not betray the real reason.
-See ADR-028.
-
 ## Refresh token security — critical invariants
 
 `TokenService.rotateRefreshToken()` must remain atomic in this order:

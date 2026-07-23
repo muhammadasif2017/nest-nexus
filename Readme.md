@@ -14,7 +14,6 @@ No business domain, on purpose — the subject is authentication, so there's not
 | **Database** | PostgreSQL + Prisma v7 | Primary data store with type-safe, generated client |
 | **API** | REST (Swagger/OpenAPI) | Versioned REST surface with generated OpenAPI docs |
 | **Auth** | JWT + OAuth2 | Token-based authentication, rotation |
-| **Authorization** | RBAC · Scopes · ABAC · ReBAC | Four techniques behind one decision point |
 | **2FA** | TOTP (otplib) | Authenticator app support with backup codes |
 | **Passwordless** | Magic links | Email-based authentication |
 | **Passkeys** | WebAuthn | Passwordless login + passkey-only signup |
@@ -36,9 +35,7 @@ flowchart LR
 
     subgraph Features["Feature modules (src/modules)"]
         Auth["auth<br/>JWT · OAuth2 · 2FA · magic links · WebAuthn · API keys"]
-        Authz["authorization<br/>RBAC · Scopes · ABAC · ReBAC"]
         Users["users"]
-        Docs["document (authz demo)"]
     end
 
     subgraph Core["Core infrastructure (src/core)"]
@@ -159,8 +156,6 @@ src/
 │
 └── modules/                         # Feature modules — auth-focused, no business domain
     ├── auth/                        # JWT, OAuth2 (Google/GitHub/Microsoft), TOTP, magic links, WebAuthn, API keys
-    ├── authorization/              # RBAC/Scopes, ABAC policies, ReBAC tuples — one decision point
-    ├── document/                   # Demo resource exercising all four authz techniques
     └── users/                       # REST controller, serialization
 
 prisma/
@@ -196,45 +191,6 @@ flowchart TD
     wa["WebAuthn login / signup verify"] --> issue["TokenService<br/>access token (15m) + HttpOnly refresh cookie (7d)"]
     issue --> user["req.user — one shape for every guard"]
     apikey["API key (X-API-Key header)"] -.->|"M2M — no JWT, own guard"| user
-```
-
-### Authorization is four techniques behind one decision point
-
-Authentication answers *who you are*; authorization answers *what you may do*. The
-`document` resource demos four techniques side by side: **RBAC** (role checks), **Scopes**
-(roles expand to permission strings via a single source-of-truth map), **ABAC** (named
-policy predicates over resource attributes), and **ReBAC** (per-subject/per-object
-relationship tuples, Zanzibar-lite). Each is a guard
-that no-ops unless its decorator is on the route, so stacked decorators read as logical
-AND. Object-level decisions a stacked guard can't express (read = `read:any` OR public
-visibility OR a `viewer` relation) live in `AuthorizationService.can()`. Denied reads
-return `404`, not `403`, so a caller can't enumerate which ids exist. See ADR-023 through
-ADR-029.
-
-The demo routes and the technique(s) gating each:
-
-| Route | Gated by |
-|---|---|
-| `POST /documents` | `document:write` scope |
-| `GET /documents` | `document:read` scope + DB-level readable filter (pagination over the readable subset) |
-| `GET /documents/:id` | scope, then `AuthorizationService.can()` — scope OR visibility OR relation; denied → `404` |
-| `GET /documents/:id/preview` | scope AND ABAC policy `document.read` |
-| `PATCH /documents/:id` | scope AND `editor` relation |
-| `DELETE /documents/:id` | scope AND `owner` relation |
-| `POST/DELETE /documents/:id/share` | scope AND `owner` relation (grants/revokes relation tuples) |
-
-```mermaid
-flowchart TD
-    req["Request hits a /documents route"] --> sa{"super_admin?"}
-    sa -->|"yes"| allow["ALLOW — short-circuits every check"]
-    sa -->|"no"| stack["Stacked guards — each no-ops without its decorator,<br/>stacked decorators = logical AND"]
-    stack --> perm{"PermissionsGuard<br/>@RequirePermission"}
-    perm -->|"scope missing"| forbid["403"]
-    perm -->|"pass / no-op"| rel{"RelationGuard<br/>@RequireRelation"}
-    rel -->|"no tuple (owner ⇒ editor ⇒ viewer)"| forbid
-    rel -->|"pass / no-op"| policy{"PolicyGuard<br/>@Policy"}
-    policy -->|"denied read"| nf["404 — indistinguishable from missing id"]
-    policy -->|"pass / no-op"| handler["Handler<br/>composed decisions via AuthorizationService.can()"]
 ```
 
 ### Refresh token rotation with reuse detection
